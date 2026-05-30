@@ -1,10 +1,5 @@
-import { APP_NAME } from "@/lib/app-info";
+import { InboxApp } from "@/components/inbox/InboxApp";
 
 export default function HomePage() {
-  return (
-    <main className="app-shell">
-      <h1>{APP_NAME}</h1>
-      <p>Private SMS aggregation dashboard</p>
-    </main>
-  );
+  return <InboxApp />;
 }
