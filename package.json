@@ -8,6 +8,7 @@
     "start": "node node_modules/next/dist/bin/next start",
     "test": "node node_modules/vitest/vitest.mjs run --pool threads",
     "test:watch": "node node_modules/vitest/vitest.mjs --pool threads",
+    "predb:push": "node scripts/ensure-sqlite-db.mjs",
     "db:generate": "node node_modules/prisma/build/index.js generate",
     "db:push": "node node_modules/prisma/build/index.js db push",
     "db:studio": "node node_modules/prisma/build/index.js studio"
