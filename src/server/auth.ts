@@ -30,6 +30,15 @@ export function hasValidIngestToken(
   return Boolean(token && expectedToken && safeEqual(token, expectedToken));
 }
 
+export function hasValidWebAccessKey(
+  received: unknown,
+  expected = process.env.WEB_ACCESS_KEY
+) {
+  return Boolean(
+    typeof received === "string" && expected && safeEqual(received, expected)
+  );
+}
+
 export function createAccessCookieValue(
   webAccessKey = process.env.WEB_ACCESS_KEY
 ) {

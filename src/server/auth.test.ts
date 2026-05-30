@@ -5,6 +5,7 @@ import {
   createAccessCookieValue,
   extractBearerToken,
   hasValidAccessCookie,
+  hasValidWebAccessKey,
   hasValidIngestToken
 } from "./auth";
 
@@ -24,6 +25,19 @@ describe("hasValidIngestToken", () => {
       true
     );
     expect(hasValidIngestToken("Bearer wrong", "phone-secret")).toBe(false);
+  });
+});
+
+describe("hasValidWebAccessKey", () => {
+  it("validates the configured web access key", () => {
+    expect(hasValidWebAccessKey("web-secret", "web-secret")).toBe(true);
+    expect(hasValidWebAccessKey("wrong", "web-secret")).toBe(false);
+  });
+
+  it("rejects missing and non-string values", () => {
+    expect(hasValidWebAccessKey(undefined, "web-secret")).toBe(false);
+    expect(hasValidWebAccessKey("web-secret", undefined)).toBe(false);
+    expect(hasValidWebAccessKey(null, "web-secret")).toBe(false);
   });
 });
 
