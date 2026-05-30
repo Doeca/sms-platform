@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Mail, MailOpen } from "lucide-react";
 import type { ClientCategory, ClientMessage } from "@/client/api";
 
@@ -20,6 +21,22 @@ export function MessageItem({
   onReadToggle,
   onCategoryChange
 }: MessageItemProps) {
+  const [pending, setPending] = useState(false);
+
+  async function runAction(action: () => Promise<void>) {
+    if (pending) {
+      return;
+    }
+
+    setPending(true);
+
+    try {
+      await action();
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
     <article
       className={`message-item ${message.isRead ? "is-read" : "is-unread"}`}
@@ -40,7 +57,10 @@ export function MessageItem({
       <footer className="message-item__actions">
         <button
           type="button"
-          onClick={() => onReadToggle(message.id, !message.isRead)}
+          disabled={pending}
+          onClick={() =>
+            void runAction(() => onReadToggle(message.id, !message.isRead))
+          }
         >
           {message.isRead ? <Mail size={16} /> : <MailOpen size={16} />}
           {message.isRead ? "标记未读" : "标记已读"}
@@ -50,8 +70,11 @@ export function MessageItem({
           修改分类
           <select
             value={message.category}
+            disabled={pending}
             onChange={(event) =>
-              onCategoryChange(message.id, event.target.value as ClientCategory)
+              void runAction(() =>
+                onCategoryChange(message.id, event.target.value as ClientCategory)
+              )
             }
           >
             <option value="verification">验证码</option>

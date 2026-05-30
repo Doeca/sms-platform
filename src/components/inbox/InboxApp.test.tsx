@@ -71,6 +71,11 @@ describe("InboxApp", () => {
     await waitFor(() => {
       expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
     });
+
+    const inboxFetchCount = (fetch as ReturnType<typeof vi.fn>).mock.calls.filter(
+      ([url]) => url === "/api/messages"
+    ).length;
+    expect(inboxFetchCount).toBe(1);
   });
 
   it("shows an access error when the access key is rejected", async () => {
@@ -193,5 +198,58 @@ describe("InboxApp", () => {
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
 
     expect(fetchMock.mock.calls.length).toBeGreaterThan(beforePollCount);
+  });
+
+  it("shows a stable error when message refresh fails", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/auth/access") {
+        return Response.json({ ok: true });
+      }
+
+      throw new Error("network down");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const user = userEvent.setup();
+
+    render(<InboxApp />);
+
+    await user.type(screen.getByLabelText("访问密钥"), "secret");
+    await user.click(screen.getByRole("button", { name: "进入" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("短信刷新失败")).toBeInTheDocument();
+    });
+  });
+
+  it("shows a stable error when message updates fail", async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/api/auth/access") {
+        return Response.json({ ok: true });
+      }
+
+      if (url === "/api/messages/msg-1" && init?.method === "PATCH") {
+        throw new Error("database down");
+      }
+
+      return Response.json(inboxPayload);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const user = userEvent.setup();
+
+    render(<InboxApp />);
+
+    await user.type(screen.getByLabelText("访问密钥"), "secret");
+    await user.click(screen.getByRole("button", { name: "进入" }));
+    await waitFor(() => {
+      expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "标记已读" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("短信更新失败")).toBeInTheDocument();
+    });
   });
 });

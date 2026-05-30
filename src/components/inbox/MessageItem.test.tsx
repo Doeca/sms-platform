@@ -57,4 +57,23 @@ describe("MessageItem", () => {
     expect(onReadToggle).toHaveBeenCalledWith("msg-1", true);
     expect(onCategoryChange).toHaveBeenCalledWith("msg-1", "other");
   });
+
+  it("prevents overlapping actions", async () => {
+    const onReadToggle = vi.fn(
+      () => new Promise<void>((resolve) => setTimeout(resolve, 25))
+    );
+    const user = userEvent.setup();
+
+    render(
+      <MessageItem
+        message={message}
+        onReadToggle={onReadToggle}
+        onCategoryChange={async () => undefined}
+      />
+    );
+
+    await user.dblClick(screen.getByRole("button", { name: "标记已读" }));
+
+    expect(onReadToggle).toHaveBeenCalledTimes(1);
+  });
 });

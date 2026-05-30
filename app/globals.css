@@ -141,6 +141,12 @@ select {
   opacity: 0.7;
 }
 
+.message-item__actions button:disabled,
+.message-item__actions select:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
 .form-error {
   margin: 0;
   color: var(--danger);
@@ -195,13 +201,12 @@ select {
 .message-item {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--line);
   border-radius: 8px;
   padding: 16px;
 }
 
 .message-item.is-unread {
-  border-left-color: var(--accent);
+  border-color: var(--accent);
 }
 
 .message-item__header {
@@ -220,6 +225,7 @@ select {
 .message-item__body {
   margin: 14px 0;
   line-height: 1.65;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
@@ -244,8 +250,8 @@ select {
 }
 
 .category--loan_collection {
-  color: #92400e;
-  background: #fff7e0;
+  color: #111111;
+  background: #ffffff;
 }
 
 .category--other {

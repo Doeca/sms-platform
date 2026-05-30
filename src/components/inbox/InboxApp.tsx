@@ -33,11 +33,21 @@ export function InboxApp() {
   const [pendingAccess, setPendingAccess] = useState(false);
   const [filters, setFilters] = useState<MessageFilters>({ readState: "all" });
   const [inbox, setInbox] = useState<InboxResponse>(emptyInbox);
+  const [inboxError, setInboxError] = useState<string | null>(null);
 
   const loadMessages = useCallback(async () => {
     const nextInbox = await fetchMessages(filters);
     setInbox(nextInbox);
+    setInboxError(null);
   }, [filters]);
+
+  const refreshMessages = useCallback(async () => {
+    try {
+      await loadMessages();
+    } catch {
+      setInboxError("短信刷新失败");
+    }
+  }, [loadMessages]);
 
   async function handleAccessSubmit(accessKey: string) {
     setPendingAccess(true);
@@ -46,7 +56,6 @@ export function InboxApp() {
     try {
       await enterAccessKey(accessKey);
       setAuthenticated(true);
-      await loadMessages();
     } catch {
       setAccessError("访问密钥不正确");
     } finally {
@@ -55,13 +64,21 @@ export function InboxApp() {
   }
 
   async function handleReadToggle(id: string, isRead: boolean) {
-    await updateMessage(id, { isRead });
-    await loadMessages();
+    try {
+      await updateMessage(id, { isRead });
+      await loadMessages();
+    } catch {
+      setInboxError("短信更新失败");
+    }
   }
 
   async function handleCategoryChange(id: string, category: ClientCategory) {
-    await updateMessage(id, { category });
-    await loadMessages();
+    try {
+      await updateMessage(id, { category });
+      await loadMessages();
+    } catch {
+      setInboxError("短信更新失败");
+    }
   }
 
   useEffect(() => {
@@ -69,13 +86,13 @@ export function InboxApp() {
       return;
     }
 
-    void loadMessages();
+    void refreshMessages();
     const interval = window.setInterval(() => {
-      void loadMessages();
+      void refreshMessages();
     }, POLL_INTERVAL_MS);
 
     return () => window.clearInterval(interval);
-  }, [authenticated, loadMessages]);
+  }, [authenticated, refreshMessages]);
 
   if (!authenticated) {
     return (
@@ -97,6 +114,7 @@ export function InboxApp() {
       </header>
 
       <StatsBar stats={inbox.stats} />
+      {inboxError ? <p className="form-error">{inboxError}</p> : null}
       <FilterBar filters={filters} sources={inbox.sources} onChange={setFilters} />
       <MessageList
         messages={inbox.messages}
