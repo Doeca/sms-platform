@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDedupeKey } from "./identifiers";
+import { buildDedupeKey, buildSourceIdentityKey } from "./identifiers";
 
 describe("buildDedupeKey", () => {
   it("uses receiving number, sender, body, and received time", () => {
@@ -36,5 +36,25 @@ describe("buildDedupeKey", () => {
     });
 
     expect(first).not.toBe(second);
+  });
+});
+
+describe("buildSourceIdentityKey", () => {
+  it("uses receiving number, device name, and SIM slot", () => {
+    const key = buildSourceIdentityKey({
+      receivedPhoneNumber: "+8613800000000",
+      deviceName: "Redmi 1",
+      simSlot: 1
+    });
+
+    expect(key).toBe(JSON.stringify(["+8613800000000", "Redmi 1", 1]));
+  });
+
+  it("normalizes missing optional source fields to null", () => {
+    expect(
+      buildSourceIdentityKey({
+        receivedPhoneNumber: "+8613800000000"
+      })
+    ).toBe(JSON.stringify(["+8613800000000", null, null]));
   });
 });

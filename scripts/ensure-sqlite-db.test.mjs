@@ -56,5 +56,6 @@ describe("ensure sqlite database file", () => {
   it("skips non-file and in-memory database URLs", () => {
     expect(resolveSqliteFilePath("postgresql://localhost/app")).toBeNull();
     expect(resolveSqliteFilePath("file::memory:")).toBeNull();
+    expect(resolveSqliteFilePath("file:memdb1?mode=memory&cache=shared")).toBeNull();
   });
 });

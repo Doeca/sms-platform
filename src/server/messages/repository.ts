@@ -1,7 +1,7 @@
-import type { MessageCategory, Prisma } from "@prisma/client";
+import { Prisma, type MessageCategory } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
 import type { ClassificationResult } from "@/server/classification/types";
-import { buildDedupeKey } from "./identifiers";
+import { buildDedupeKey, buildSourceIdentityKey } from "./identifiers";
 import type {
   IncomingMessageInput,
   ListMessagesQuery,
@@ -9,31 +9,44 @@ import type {
 } from "./schemas";
 
 async function findOrCreateSource(input: IncomingMessageInput) {
-  const existing = await prisma.messageSource.findFirst({
-    where: {
-      receivedPhoneNumber: input.receivedPhoneNumber,
-      deviceName: input.deviceName ?? null,
-      simSlot: input.simSlot ?? null
-    }
+  const identityKey = buildSourceIdentityKey(input);
+
+  const identity = await prisma.messageSourceIdentity.upsert({
+    where: { identityKey },
+    update: {},
+    create: {
+      identityKey,
+      source: {
+        create: {
+          receivedPhoneNumber: input.receivedPhoneNumber,
+          deviceName: input.deviceName,
+          simSlot: input.simSlot
+        }
+      }
+    },
+    include: { source: true }
   });
 
-  if (existing) {
-    return existing;
-  }
-
-  return prisma.messageSource.create({
-    data: {
-      receivedPhoneNumber: input.receivedPhoneNumber,
-      deviceName: input.deviceName,
-      simSlot: input.simSlot
-    }
-  });
+  return identity.source;
 }
 
 function messageInclude() {
   return {
     source: true
   } satisfies Prisma.MessageInclude;
+}
+
+function isUniqueConstraintError(error: unknown, field: string) {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+    return false;
+  }
+
+  const target = error.meta?.target;
+
+  return (
+    error.code === "P2002" &&
+    (target === field || (Array.isArray(target) && target.includes(field)))
+  );
 }
 
 export async function saveIncomingMessage(
@@ -54,24 +67,44 @@ export async function saveIncomingMessage(
   }
 
   const source = await findOrCreateSource(input);
-  const message = await prisma.message.create({
-    data: {
-      sourceId: source.id,
-      sender: input.sender,
-      body: input.body,
-      receivedAt: input.receivedAt,
-      category: classification.category,
-      classificationSource: classification.source,
-      classificationError: classification.error,
-      dedupeKey
-    },
-    include: messageInclude()
-  });
+  try {
+    const message = await prisma.message.create({
+      data: {
+        sourceId: source.id,
+        sender: input.sender,
+        body: input.body,
+        receivedAt: input.receivedAt,
+        category: classification.category,
+        classificationSource: classification.source,
+        classificationError: classification.error,
+        dedupeKey
+      },
+      include: messageInclude()
+    });
 
-  return {
-    duplicate: false,
-    message
-  };
+    return {
+      duplicate: false,
+      message
+    };
+  } catch (error) {
+    if (!isUniqueConstraintError(error, "dedupeKey")) {
+      throw error;
+    }
+
+    const duplicate = await prisma.message.findUnique({
+      where: { dedupeKey },
+      include: messageInclude()
+    });
+
+    if (!duplicate) {
+      throw error;
+    }
+
+    return {
+      duplicate: true,
+      message: duplicate
+    };
+  }
 }
 
 export async function listMessages(query: ListMessagesQuery) {

@@ -67,6 +67,59 @@ describe("message repository", () => {
     expect(duplicate.message.id).toBe(first.message.id);
   });
 
+  it("returns an existing message when duplicate retries arrive concurrently", async () => {
+    const input = {
+      receivedPhoneNumber: "+8613800000000",
+      sender: "955xx",
+      body: "您的验证码是 123456",
+      receivedAt: new Date("2026-05-30T08:30:00.000Z")
+    };
+
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        saveIncomingMessage(input, {
+          category: "verification",
+          source: "keyword"
+        })
+      )
+    );
+
+    const messageIds = new Set(results.map((result) => result.message.id));
+
+    expect(messageIds.size).toBe(1);
+    expect(results.filter((result) => result.duplicate)).toHaveLength(7);
+    await expect(prisma.message.count()).resolves.toBe(1);
+  });
+
+  it("keeps one source row when different messages from the same source arrive concurrently", async () => {
+    const receivedPhoneNumber = "+8613800000000";
+    const deviceName = "Redmi 1";
+    const simSlot = 1;
+
+    await Promise.all(
+      Array.from({ length: 8 }, (_, index) =>
+        saveIncomingMessage(
+          {
+            receivedPhoneNumber,
+            deviceName,
+            simSlot,
+            sender: `sender-${index}`,
+            body: `普通通知 ${index}`,
+            receivedAt: new Date(`2026-05-30T08:3${index}:00.000Z`)
+          },
+          { category: "other", source: "kimi" }
+        )
+      )
+    );
+
+    const sources = await prisma.messageSource.findMany({
+      where: { receivedPhoneNumber, deviceName, simSlot }
+    });
+
+    expect(sources).toHaveLength(1);
+    await expect(prisma.message.count()).resolves.toBe(8);
+  });
+
   it("filters messages by read state and category", async () => {
     const saved = await saveIncomingMessage(
       {

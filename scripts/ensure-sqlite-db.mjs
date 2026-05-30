@@ -3,8 +3,12 @@ import { access, mkdir, open } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-function isMemoryDatabase(filePath) {
-  return filePath === ":memory:" || filePath === "memory";
+function isMemoryDatabase(filePath, searchParams = new URLSearchParams()) {
+  return (
+    filePath === ":memory:" ||
+    filePath === "memory" ||
+    searchParams.get("mode") === "memory"
+  );
 }
 
 export function resolveSqliteFilePath(
@@ -15,9 +19,12 @@ export function resolveSqliteFilePath(
     return null;
   }
 
-  const rawFilePath = databaseUrl.slice("file:".length).split("?")[0];
+  const [rawFilePath, rawSearchParams = ""] = databaseUrl
+    .slice("file:".length)
+    .split("?");
+  const searchParams = new URLSearchParams(rawSearchParams);
 
-  if (!rawFilePath || isMemoryDatabase(rawFilePath)) {
+  if (!rawFilePath || isMemoryDatabase(rawFilePath, searchParams)) {
     return null;
   }
 

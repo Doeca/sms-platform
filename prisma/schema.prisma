@@ -28,9 +28,18 @@ model MessageSource {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   messages            Message[]
+  identity            MessageSourceIdentity?
 
   @@index([receivedPhoneNumber])
   @@index([deviceName])
+}
+
+model MessageSourceIdentity {
+  identityKey String        @id
+  sourceId    String        @unique
+  source      MessageSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 }
 
 model Message {
