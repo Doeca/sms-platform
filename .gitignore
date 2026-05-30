@@ -1,3 +1,12 @@
 .codegraph/
+.env
+.env*.local
+node_modules/
+.next/
+coverage/
+prisma/*.db
+prisma/*.db-journal
+prisma/*.db-wal
+prisma/*.db-shm
 .worktrees
 .worktrees/
