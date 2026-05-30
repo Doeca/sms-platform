@@ -6,10 +6,10 @@ type DedupeInput = {
 };
 
 export function buildDedupeKey(input: DedupeInput) {
-  return [
+  return JSON.stringify([
     input.receivedPhoneNumber.trim(),
     input.sender.trim(),
-    input.body.trim(),
+    input.body,
     input.receivedAt.toISOString()
-  ].join("|");
+  ]);
 }

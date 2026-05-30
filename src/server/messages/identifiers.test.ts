@@ -11,7 +11,30 @@ describe("buildDedupeKey", () => {
     });
 
     expect(key).toBe(
-      "+8613800000000|955xx|hello|2026-05-30T08:30:00.000Z"
+      JSON.stringify([
+        "+8613800000000",
+        "955xx",
+        "hello",
+        "2026-05-30T08:30:00.000Z"
+      ])
     );
+  });
+
+  it("does not collide when fields contain delimiters", () => {
+    const receivedAt = new Date("2026-05-30T08:30:00.000Z");
+    const first = buildDedupeKey({
+      receivedPhoneNumber: "+8613800000000",
+      sender: "955xx|hello",
+      body: "body",
+      receivedAt
+    });
+    const second = buildDedupeKey({
+      receivedPhoneNumber: "+8613800000000",
+      sender: "955xx",
+      body: "hello|body",
+      receivedAt
+    });
+
+    expect(first).not.toBe(second);
   });
 });

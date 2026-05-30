@@ -8,13 +8,30 @@ export const messageCategorySchema = z.enum([
 
 export const readStateSchema = z.enum(["all", "unread", "read"]);
 
+const isoDateSchema = z.iso.datetime().transform((value) => new Date(value));
+
+const optionalSimSlotSchema = z.preprocess(
+  (value) => {
+    if (value === null) {
+      return undefined;
+    }
+
+    if (typeof value === "string" && value.trim() === "") {
+      return undefined;
+    }
+
+    return value;
+  },
+  z.coerce.number().int().min(0).max(8).optional()
+);
+
 export const incomingMessageSchema = z.object({
   receivedPhoneNumber: z.string().trim().min(1),
   deviceName: z.string().trim().min(1).optional(),
-  simSlot: z.coerce.number().int().min(0).max(8).optional(),
+  simSlot: optionalSimSlotSchema,
   sender: z.string().trim().min(1),
   body: z.string().trim().min(1),
-  receivedAt: z.coerce.date()
+  receivedAt: isoDateSchema
 });
 
 export const listMessagesQuerySchema = z.object({
@@ -22,7 +39,7 @@ export const listMessagesQuerySchema = z.object({
   category: messageCategorySchema.optional(),
   sourceId: z.string().trim().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(200).default(100),
-  before: z.coerce.date().optional()
+  before: isoDateSchema.optional()
 });
 
 export const updateMessageSchema = z
