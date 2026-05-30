@@ -120,6 +120,64 @@ describe("message repository", () => {
     await expect(prisma.message.count()).resolves.toBe(8);
   });
 
+  it("claims an existing source row before creating a source identity", async () => {
+    const existingSource = await prisma.messageSource.create({
+      data: {
+        receivedPhoneNumber: "+8613800000000",
+        deviceName: "Redmi 1",
+        simSlot: 1
+      }
+    });
+
+    const saved = await saveIncomingMessage(
+      {
+        receivedPhoneNumber: "+8613800000000",
+        deviceName: "Redmi 1",
+        simSlot: 1,
+        sender: "10086",
+        body: "普通通知",
+        receivedAt: new Date("2026-05-30T08:31:00.000Z")
+      },
+      { category: "other", source: "kimi" }
+    );
+
+    expect(saved.message.sourceId).toBe(existingSource.id);
+    await expect(prisma.messageSource.count()).resolves.toBe(1);
+    await expect(prisma.messageSourceIdentity.count()).resolves.toBe(1);
+  });
+
+  it("claims an existing source row once when matching messages arrive concurrently", async () => {
+    const existingSource = await prisma.messageSource.create({
+      data: {
+        receivedPhoneNumber: "+8613800000000",
+        deviceName: "Redmi 1",
+        simSlot: 1
+      }
+    });
+
+    const results = await Promise.all(
+      Array.from({ length: 8 }, (_, index) =>
+        saveIncomingMessage(
+          {
+            receivedPhoneNumber: "+8613800000000",
+            deviceName: "Redmi 1",
+            simSlot: 1,
+            sender: `sender-${index}`,
+            body: `普通通知 ${index}`,
+            receivedAt: new Date(`2026-05-30T08:3${index}:00.000Z`)
+          },
+          { category: "other", source: "kimi" }
+        )
+      )
+    );
+
+    expect(results.every((result) => result.message.sourceId === existingSource.id)).toBe(
+      true
+    );
+    await expect(prisma.messageSource.count()).resolves.toBe(1);
+    await expect(prisma.messageSourceIdentity.count()).resolves.toBe(1);
+  });
+
   it("filters messages by read state and category", async () => {
     const saved = await saveIncomingMessage(
       {

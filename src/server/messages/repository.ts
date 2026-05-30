@@ -10,6 +10,53 @@ import type {
 
 async function findOrCreateSource(input: IncomingMessageInput) {
   const identityKey = buildSourceIdentityKey(input);
+  const existingIdentity = await prisma.messageSourceIdentity.findUnique({
+    where: { identityKey },
+    include: { source: true }
+  });
+
+  if (existingIdentity) {
+    return existingIdentity.source;
+  }
+
+  const existingSource = await prisma.messageSource.findFirst({
+    where: {
+      receivedPhoneNumber: input.receivedPhoneNumber,
+      deviceName: input.deviceName ?? null,
+      simSlot: input.simSlot ?? null
+    }
+  });
+
+  if (existingSource) {
+    try {
+      await prisma.messageSourceIdentity.create({
+        data: {
+          identityKey,
+          sourceId: existingSource.id
+        }
+      });
+
+      return existingSource;
+    } catch (error) {
+      if (
+        !isUniqueConstraintError(error, "identityKey") &&
+        !isUniqueConstraintError(error, "sourceId")
+      ) {
+        throw error;
+      }
+
+      const identity = await prisma.messageSourceIdentity.findUnique({
+        where: { identityKey },
+        include: { source: true }
+      });
+
+      if (!identity) {
+        throw error;
+      }
+
+      return identity.source;
+    }
+  }
 
   const identity = await prisma.messageSourceIdentity.upsert({
     where: { identityKey },
