@@ -90,6 +90,50 @@ describe("NotificationToggle", () => {
     });
   });
 
+  it("stays disabled when permission requests fail", async () => {
+    const requestPermission = stubNotification(
+      "default",
+      vi.fn(async () => {
+        throw new Error("permission failed");
+      })
+    );
+    const onEnabledChange = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <NotificationToggle enabled={false} onEnabledChange={onEnabledChange} />
+    );
+
+    await user.click(screen.getByRole("button", { name: "开启验证码通知" }));
+
+    await waitFor(() => {
+      expect(requestPermission).toHaveBeenCalledTimes(1);
+      expect(onEnabledChange).toHaveBeenCalledWith(false);
+    });
+  });
+
+  it("prevents overlapping permission requests", async () => {
+    const requestPermission = stubNotification(
+      "default",
+      vi.fn(
+        () =>
+          new Promise<NotificationPermission>((resolve) =>
+            setTimeout(() => resolve("granted"), 25)
+          )
+      )
+    );
+    const onEnabledChange = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <NotificationToggle enabled={false} onEnabledChange={onEnabledChange} />
+    );
+
+    await user.dblClick(screen.getByRole("button", { name: "开启验证码通知" }));
+
+    expect(requestPermission).toHaveBeenCalledTimes(1);
+  });
+
   it("is safe when browser notifications are unavailable", async () => {
     vi.stubGlobal("Notification", undefined);
     const onEnabledChange = vi.fn();

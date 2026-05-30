@@ -5,11 +5,16 @@ import type { ClientMessage } from "@/client/api";
 
 export function useVerificationNotifications(
   messages: ClientMessage[],
-  enabled: boolean
+  enabled: boolean,
+  ready = true
 ) {
   const seenIds = useRef<Set<string> | null>(null);
 
   useEffect(() => {
+    if (!ready) {
+      return;
+    }
+
     if (seenIds.current === null) {
       seenIds.current = new Set(messages.map((message) => message.id));
       return;
@@ -33,5 +38,5 @@ export function useVerificationNotifications(
         });
       }
     }
-  }, [enabled, messages]);
+  }, [enabled, messages, ready]);
 }

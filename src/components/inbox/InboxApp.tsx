@@ -36,13 +36,15 @@ export function InboxApp() {
   const [filters, setFilters] = useState<MessageFilters>({ readState: "all" });
   const [inbox, setInbox] = useState<InboxResponse>(emptyInbox);
   const [inboxError, setInboxError] = useState<string | null>(null);
+  const [inboxLoaded, setInboxLoaded] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
-  useVerificationNotifications(inbox.messages, notificationsEnabled);
+  useVerificationNotifications(inbox.messages, notificationsEnabled, inboxLoaded);
 
   const loadMessages = useCallback(async () => {
     const nextInbox = await fetchMessages(filters);
     setInbox(nextInbox);
+    setInboxLoaded(true);
     setInboxError(null);
   }, [filters]);
 

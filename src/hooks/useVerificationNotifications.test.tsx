@@ -47,6 +47,36 @@ describe("useVerificationNotifications", () => {
     expect(notification).not.toHaveBeenCalled();
   });
 
+  it("uses the first ready message list as the initial notification baseline", () => {
+    const notification = stubNotification("granted");
+
+    const { rerender } = renderHook(
+      ({ messages, ready }) => useVerificationNotifications(messages, true, ready),
+      {
+        initialProps: { messages: [] as ClientMessage[], ready: false }
+      }
+    );
+
+    rerender({ messages: [message("1", "verification")], ready: true });
+
+    expect(notification).not.toHaveBeenCalled();
+  });
+
+  it("notifies for the first new verification after an empty ready baseline", () => {
+    const notification = stubNotification("granted");
+
+    const { rerender } = renderHook(
+      ({ messages }) => useVerificationNotifications(messages, true, true),
+      {
+        initialProps: { messages: [] as ClientMessage[] }
+      }
+    );
+
+    rerender({ messages: [message("1", "verification")] });
+
+    expect(notification).toHaveBeenCalledTimes(1);
+  });
+
   it("notifies only for newly observed verification messages", () => {
     const notification = stubNotification("granted");
 
@@ -128,6 +158,25 @@ describe("useVerificationNotifications", () => {
     rerender({
       messages: [message("2", "verification"), message("1", "other")]
     });
+
+    expect(notification).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not repeat notifications after a message disappears from filtered results", () => {
+    const notification = stubNotification("granted");
+
+    const { rerender } = renderHook(
+      ({ messages }) => useVerificationNotifications(messages, true),
+      {
+        initialProps: { messages: [message("1", "other")] }
+      }
+    );
+
+    rerender({
+      messages: [message("2", "verification"), message("1", "other")]
+    });
+    rerender({ messages: [] });
+    rerender({ messages: [message("2", "verification")] });
 
     expect(notification).toHaveBeenCalledTimes(1);
   });

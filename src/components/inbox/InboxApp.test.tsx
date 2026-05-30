@@ -289,4 +289,38 @@ describe("InboxApp", () => {
     });
     expect(notification).not.toHaveBeenCalled();
   });
+
+  it("does not notify for the first loaded messages when notifications are enabled early", async () => {
+    let resolveMessages: (response: Response) => void = () => undefined;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/auth/access") {
+        return Response.json({ ok: true });
+      }
+
+      return new Promise<Response>((resolve) => {
+        resolveMessages = resolve;
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const notification = vi.fn();
+    vi.stubGlobal("Notification", notification);
+    Object.assign(Notification, {
+      permission: "granted",
+      requestPermission: vi.fn(async () => "granted")
+    });
+    const user = userEvent.setup();
+
+    render(<InboxApp />);
+
+    await user.type(screen.getByLabelText("访问密钥"), "secret");
+    await user.click(screen.getByRole("button", { name: "进入" }));
+    await user.click(screen.getByRole("button", { name: "开启验证码通知" }));
+    resolveMessages(Response.json(inboxPayload));
+
+    await waitFor(() => {
+      expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
+    });
+
+    expect(notification).not.toHaveBeenCalled();
+  });
 });
