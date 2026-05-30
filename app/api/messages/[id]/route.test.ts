@@ -2,8 +2,8 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildAccessCookie } from "@/server/auth";
 import { prisma } from "@/server/db/prisma";
 import { resetDatabase } from "@/server/db/test-utils";
-import { saveIncomingMessage } from "@/server/messages/repository";
-import { PATCH } from "./route";
+import { saveIncomingMessage, updateMessage } from "@/server/messages/repository";
+import { handleUpdateRequest, PATCH } from "./route";
 
 beforeEach(async () => {
   vi.stubEnv("WEB_ACCESS_KEY", "web-secret");
@@ -119,6 +119,23 @@ describe("PATCH /api/messages/:id", () => {
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({
       error: "Message not found"
+    });
+  });
+
+  it("returns stable JSON when updating fails unexpectedly", async () => {
+    const response = await handleUpdateRequest(
+      authedPatch({ isRead: true }),
+      context("message-id"),
+      {
+        update: vi.fn(async () => {
+          throw new Error("database down");
+        }) as typeof updateMessage
+      }
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "Failed to update message"
     });
   });
 });

@@ -82,4 +82,24 @@ describe("GET /api/messages", () => {
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ error: "Invalid query" });
   });
+
+  it.each([
+    "readState=nope",
+    "category=spam",
+    "sourceId=",
+    "before=not-a-date",
+    "limit=201",
+    "limit=1.5",
+    "limit=0&limit=100",
+    "readState=nope&readState=read",
+    "category=other&category=verification",
+    "sourceId=one&sourceId=two",
+    "before=2026-05-30T08%3A30%3A00.000Z&before=2026-05-31T08%3A30%3A00.000Z"
+  ])("rejects invalid query string %s", async (queryString) => {
+    const response = await GET(
+      authedRequest(`http://localhost/api/messages?${queryString}`)
+    );
+
+    expect(response.status).toBe(400);
+  });
 });

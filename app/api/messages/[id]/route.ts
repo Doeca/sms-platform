@@ -12,6 +12,9 @@ type RouteContext = {
 };
 
 type UpdatedMessage = Awaited<ReturnType<typeof updateMessage>>;
+type UpdateDependencies = {
+  update: typeof updateMessage;
+};
 
 function serializeMessage(message: UpdatedMessage) {
   return {
@@ -41,7 +44,11 @@ function isRecordNotFoundError(error: unknown) {
   );
 }
 
-export async function PATCH(request: Request, context: RouteContext) {
+export async function handleUpdateRequest(
+  request: Request,
+  context: RouteContext,
+  dependencies: UpdateDependencies
+) {
   if (!hasValidAccessCookie(request.headers.get("cookie"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -63,7 +70,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const { id } = await context.params;
 
   try {
-    const message = await updateMessage(id, parsed.data);
+    const message = await dependencies.update(id, parsed.data);
 
     return NextResponse.json({
       message: serializeMessage(message)
@@ -75,4 +82,10 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     return NextResponse.json({ error: "Failed to update message" }, { status: 500 });
   }
+}
+
+export async function PATCH(request: Request, context: RouteContext) {
+  return handleUpdateRequest(request, context, {
+    update: updateMessage
+  });
 }

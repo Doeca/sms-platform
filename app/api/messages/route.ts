@@ -5,6 +5,13 @@ import { listMessages } from "@/server/messages/repository";
 import { listMessagesQuerySchema } from "@/server/messages/schemas";
 
 type ListMessage = Awaited<ReturnType<typeof listMessages>>["messages"][number];
+const singleValueQueryKeys = [
+  "readState",
+  "category",
+  "sourceId",
+  "limit",
+  "before"
+] as const;
 
 function serializeMessage(message: ListMessage) {
   return {
@@ -33,6 +40,11 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
+
+  if (singleValueQueryKeys.some((key) => url.searchParams.getAll(key).length > 1)) {
+    return NextResponse.json({ error: "Invalid query" }, { status: 400 });
+  }
+
   const parsed = listMessagesQuerySchema.safeParse(
     Object.fromEntries(url.searchParams.entries())
   );
