@@ -252,4 +252,41 @@ describe("InboxApp", () => {
       expect(screen.getByText("短信更新失败")).toBeInTheDocument();
     });
   });
+
+  it("does not notify for messages already loaded before enabling notifications", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/api/auth/access") {
+          return Response.json({ ok: true });
+        }
+
+        return Response.json(inboxPayload);
+      })
+    );
+    const notification = vi.fn();
+    vi.stubGlobal("Notification", notification);
+    Object.assign(Notification, {
+      permission: "granted",
+      requestPermission: vi.fn(async () => "granted")
+    });
+    const user = userEvent.setup();
+
+    render(<InboxApp />);
+
+    await user.type(screen.getByLabelText("访问密钥"), "secret");
+    await user.click(screen.getByRole("button", { name: "进入" }));
+    await waitFor(() => {
+      expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "开启验证码通知" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "关闭验证码通知" })
+      ).toBeInTheDocument();
+    });
+    expect(notification).not.toHaveBeenCalled();
+  });
 });

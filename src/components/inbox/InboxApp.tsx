@@ -10,9 +10,11 @@ import {
   type MessageFilters
 } from "@/client/api";
 import { AccessForm } from "@/components/access/AccessForm";
+import { useVerificationNotifications } from "@/hooks/useVerificationNotifications";
 import { POLL_INTERVAL_MS } from "@/lib/app-info";
 import { FilterBar } from "./FilterBar";
 import { MessageList } from "./MessageList";
+import { NotificationToggle } from "./NotificationToggle";
 import { StatsBar } from "./StatsBar";
 
 const emptyInbox: InboxResponse = {
@@ -34,6 +36,9 @@ export function InboxApp() {
   const [filters, setFilters] = useState<MessageFilters>({ readState: "all" });
   const [inbox, setInbox] = useState<InboxResponse>(emptyInbox);
   const [inboxError, setInboxError] = useState<string | null>(null);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+
+  useVerificationNotifications(inbox.messages, notificationsEnabled);
 
   const loadMessages = useCallback(async () => {
     const nextInbox = await fetchMessages(filters);
@@ -111,6 +116,10 @@ export function InboxApp() {
           <h1>SMS Inbox</h1>
           <p>短信聚合收件箱</p>
         </div>
+        <NotificationToggle
+          enabled={notificationsEnabled}
+          onEnabledChange={setNotificationsEnabled}
+        />
       </header>
 
       <StatsBar stats={inbox.stats} />
