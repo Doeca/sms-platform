@@ -1,5 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { classifyMessage } from "./classify";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.doUnmock("./kimi");
+});
 
 describe("classifyMessage", () => {
   it("uses keyword classification before Kimi", async () => {
@@ -37,5 +42,44 @@ describe("classifyMessage", () => {
       source: "fallback",
       error: "network down"
     });
+  });
+
+  it("falls back when the default Kimi API key is blank", async () => {
+    vi.stubEnv("KIMI_API_KEY", "   ");
+
+    const result = await classifyMessage("普通通知");
+
+    expect(result).toEqual({
+      category: "other",
+      source: "fallback",
+      error: "KIMI_API_KEY is not configured"
+    });
+  });
+
+  it("defaults invalid KIMI_TIMEOUT_MS values to 8000", async () => {
+    vi.stubEnv("KIMI_API_KEY", "key");
+    vi.stubEnv("KIMI_TIMEOUT_MS", "not-a-number");
+
+    const classifyWithKimi = vi.fn(async () => "other" as const);
+    vi.doMock("./kimi", () => ({
+      classifyWithKimi
+    }));
+    vi.resetModules();
+
+    const { classifyMessage: classifyWithMockedKimi } = await import(
+      "./classify"
+    );
+
+    await expect(classifyWithMockedKimi("普通通知")).resolves.toEqual({
+      category: "other",
+      source: "kimi"
+    });
+
+    expect(classifyWithKimi).toHaveBeenCalledWith(
+      "普通通知",
+      expect.objectContaining({
+        timeoutMs: 8000
+      })
+    );
   });
 });

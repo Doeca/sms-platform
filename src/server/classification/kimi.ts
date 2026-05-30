@@ -33,6 +33,10 @@ export async function classifyWithKimi(
   body: string,
   config: KimiConfig
 ): Promise<KimiCategory> {
+  if (!config.apiKey.trim()) {
+    throw new Error("KIMI_API_KEY is not configured");
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
   const fetchImpl = config.fetchImpl ?? fetch;

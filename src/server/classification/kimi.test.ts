@@ -61,6 +61,108 @@ describe("classifyWithKimi", () => {
     ).rejects.toThrow("Invalid Kimi category");
   });
 
+  it("throws for malformed JSON content", async () => {
+    const fetchImpl = vi.fn(async () =>
+      Response.json({
+        choices: [
+          {
+            message: {
+              content: "not json"
+            }
+          }
+        ]
+      })
+    );
+
+    await expect(
+      classifyWithKimi("ambiguous text", {
+        apiKey: "key",
+        baseUrl: "https://api.moonshot.cn/v1",
+        model: "kimi-k2.6",
+        timeoutMs: 8000,
+        fetchImpl
+      })
+    ).rejects.toThrow();
+  });
+
+  it("throws when Kimi omits message content", async () => {
+    const fetchImpl = vi.fn(async () =>
+      Response.json({
+        choices: [
+          {
+            message: {}
+          }
+        ]
+      })
+    );
+
+    await expect(
+      classifyWithKimi("ambiguous text", {
+        apiKey: "key",
+        baseUrl: "https://api.moonshot.cn/v1",
+        model: "kimi-k2.6",
+        timeoutMs: 8000,
+        fetchImpl
+      })
+    ).rejects.toThrow("Kimi response did not include message content");
+  });
+
+  it("does not call fetch when the API key is blank", async () => {
+    const fetchImpl = vi.fn(async () =>
+      Response.json({
+        choices: [
+          {
+            message: {
+              content: "{\"category\":\"other\"}"
+            }
+          }
+        ]
+      })
+    );
+
+    await expect(
+      classifyWithKimi("ambiguous text", {
+        apiKey: "   ",
+        baseUrl: "https://api.moonshot.cn/v1",
+        model: "kimi-k2.6",
+        timeoutMs: 8000,
+        fetchImpl
+      })
+    ).rejects.toThrow("KIMI_API_KEY is not configured");
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("aborts the Kimi request when the timeout elapses", async () => {
+    vi.useFakeTimers();
+
+    const fetchImpl = vi.fn(
+      ((_input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("The operation was aborted.", "AbortError"));
+          });
+        })) as typeof fetch
+    );
+
+    try {
+      const result = classifyWithKimi("ambiguous text", {
+        apiKey: "key",
+        baseUrl: "https://api.moonshot.cn/v1",
+        model: "kimi-k2.6",
+        timeoutMs: 25,
+        fetchImpl
+      });
+      const rejection = expect(result).rejects.toThrow("aborted");
+
+      await vi.advanceTimersByTimeAsync(25);
+
+      await rejection;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("throws when Kimi returns a non-2xx response", async () => {
     const fetchImpl = vi.fn(
       async () => new Response("rate limited", { status: 429 })
