@@ -45,7 +45,11 @@ async function parseJsonOrThrow<T>(response: Response): Promise<T> {
     throw new Error(`Request failed with status ${response.status}`);
   }
 
-  return response.json() as Promise<T>;
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw new Error("Response was not valid JSON");
+  }
 }
 
 export async function enterAccessKey(accessKey: string) {
@@ -69,7 +73,7 @@ export async function fetchMessages(filters: MessageFilters = {}) {
     params.set("category", filters.category);
   }
 
-  if (filters.sourceId) {
+  if (filters.sourceId?.trim()) {
     params.set("sourceId", filters.sourceId);
   }
 
@@ -83,7 +87,7 @@ export async function updateMessage(
   id: string,
   patch: { isRead?: boolean; category?: ClientCategory }
 ) {
-  const response = await fetch(`/api/messages/${id}`, {
+  const response = await fetch(`/api/messages/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch)

@@ -16,10 +16,23 @@ export function AccessForm({
   onSubmit
 }: AccessFormProps) {
   const [accessKey, setAccessKey] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const isDisabled = pending || submitting;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await onSubmit(accessKey);
+
+    if (isDisabled) {
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      await onSubmit(accessKey.trim());
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -36,12 +49,12 @@ export function AccessForm({
           value={accessKey}
           onChange={(event) => setAccessKey(event.target.value)}
           autoComplete="current-password"
-          disabled={pending}
+          disabled={isDisabled}
           required
         />
         {error ? <p className="form-error">{error}</p> : null}
-        <button type="submit" disabled={pending}>
-          {pending ? "验证中" : "进入"}
+        <button type="submit" disabled={isDisabled}>
+          {isDisabled ? "验证中" : "进入"}
         </button>
       </form>
     </main>

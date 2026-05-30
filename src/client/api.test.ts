@@ -1,5 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { enterAccessKey, fetchMessages, updateMessage } from "./api";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("client api", () => {
   it("submits the access key", async () => {
@@ -41,6 +45,17 @@ describe("client api", () => {
     expect(fetch).toHaveBeenCalledWith("/api/messages?sourceId=source-1");
   });
 
+  it("skips empty filters and URL-encodes filter values", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ messages: [], sources: [], stats: {} }))
+    );
+
+    await fetchMessages({ category: undefined, sourceId: "source / 1" });
+
+    expect(fetch).toHaveBeenCalledWith("/api/messages?sourceId=source+%2F+1");
+  });
+
   it("patches messages", async () => {
     vi.stubGlobal(
       "fetch",
@@ -56,6 +71,21 @@ describe("client api", () => {
     });
   });
 
+  it("URL-encodes message ids in patch paths", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ message: { id: "source/1" } }))
+    );
+
+    await updateMessage("source/1?", { category: "other" });
+
+    expect(fetch).toHaveBeenCalledWith("/api/messages/source%2F1%3F", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category: "other" })
+    });
+  });
+
   it("throws for non-ok responses", async () => {
     vi.stubGlobal(
       "fetch",
@@ -65,5 +95,14 @@ describe("client api", () => {
     await expect(enterAccessKey("wrong")).rejects.toThrow(
       "Request failed with status 401"
     );
+  });
+
+  it("throws a stable error for invalid success JSON", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 200 }))
+    );
+
+    await expect(fetchMessages()).rejects.toThrow("Response was not valid JSON");
   });
 });
