@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import { APP_NAME } from "@/lib/app-info";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SMS Inbox",
+  title: APP_NAME,
   description: "Private SMS aggregation inbox"
 };
 
