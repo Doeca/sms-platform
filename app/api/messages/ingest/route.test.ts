@@ -1,16 +1,24 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/server/db/prisma";
 import { resetDatabase } from "@/server/db/test-utils";
-import { POST } from "./route";
+import { saveIncomingMessage } from "@/server/messages/repository";
+import { handleIngestRequest, POST } from "./route";
 
 beforeEach(async () => {
   vi.stubEnv("SMS_INGEST_TOKEN", "phone-secret");
   vi.stubEnv("KIMI_API_KEY", "kimi-secret");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => {
+      throw new Error("Network calls are not expected in ingest route tests");
+    })
+  );
   await resetDatabase();
 });
 
 afterAll(async () => {
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
   await prisma.$disconnect();
 });
 
@@ -85,6 +93,7 @@ describe("POST /api/messages/ingest", () => {
     expect(json.message.classificationSource).toBe("keyword");
     expect(json.message.isRead).toBe(false);
     expect(json.duplicate).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("returns success for duplicate retries", async () => {
@@ -94,5 +103,46 @@ describe("POST /api/messages/ingest", () => {
 
     expect(response.status).toBe(200);
     expect(json.duplicate).toBe(true);
+  });
+
+  it("omits internal classification errors from the ingest response", async () => {
+    const response = await handleIngestRequest(
+      request({
+        ...validPayload,
+        body: "普通通知"
+      }),
+      {
+        classify: vi.fn(async () => ({
+          category: "other",
+          source: "fallback",
+          error: "KIMI_API_KEY is not configured"
+        } as const)),
+        save: saveIncomingMessage
+      }
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(json.message.category).toBe("other");
+    expect(json.message.classificationSource).toBe("fallback");
+    expect(json.message.classificationError).toBeUndefined();
+    expect(JSON.stringify(json)).not.toContain("KIMI_API_KEY");
+  });
+
+  it("returns a stable JSON error when persistence fails", async () => {
+    const response = await handleIngestRequest(request(validPayload), {
+      classify: vi.fn(async () => ({
+        category: "verification",
+        source: "keyword"
+      } as const)),
+      save: vi.fn(async () => {
+        throw new Error("database down");
+      }) as typeof saveIncomingMessage
+    });
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "Failed to ingest message"
+    });
   });
 });
