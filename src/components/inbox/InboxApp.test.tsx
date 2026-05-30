@@ -43,6 +43,36 @@ const inboxPayload = {
   }
 };
 
+const emptyInboxPayload = {
+  messages: [],
+  sources: inboxPayload.sources,
+  stats: {
+    all: 0,
+    unread: 0,
+    verification: 0,
+    loan_collection: 0,
+    other: 0
+  }
+};
+
+const secondVerificationPayload = {
+  ...inboxPayload,
+  messages: [
+    {
+      ...inboxPayload.messages[0],
+      id: "msg-2",
+      body: "您的验证码是 654321，请勿告诉他人。"
+    },
+    ...inboxPayload.messages
+  ],
+  stats: {
+    ...inboxPayload.stats,
+    all: 2,
+    unread: 2,
+    verification: 2
+  }
+};
+
 describe("InboxApp", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -76,6 +106,21 @@ describe("InboxApp", () => {
       ([url]) => url === "/api/messages"
     ).length;
     expect(inboxFetchCount).toBe(1);
+  });
+
+  it("loads the inbox immediately when a valid access cookie is already present", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json(inboxPayload))
+    );
+
+    render(<InboxApp initialAuthenticated />);
+
+    await waitFor(() => {
+      expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
+    });
+    expect(screen.queryByLabelText("访问密钥")).not.toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith("/api/messages");
   });
 
   it("shows an access error when the access key is rejected", async () => {
@@ -322,5 +367,52 @@ describe("InboxApp", () => {
     });
 
     expect(notification).not.toHaveBeenCalled();
+  });
+
+  it("notifies for new verification messages even when the visible filter excludes them", async () => {
+    const notification = vi.fn();
+    vi.stubGlobal("Notification", notification);
+    Object.assign(Notification, {
+      permission: "granted",
+      requestPermission: vi.fn(async () => "granted")
+    });
+
+    let allMessagesFetches = 0;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/auth/access") {
+        return Response.json({ ok: true });
+      }
+
+      if (url === "/api/messages?readState=read") {
+        return Response.json(emptyInboxPayload);
+      }
+
+      allMessagesFetches += 1;
+      return Response.json(
+        allMessagesFetches === 1 ? inboxPayload : secondVerificationPayload
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<InboxApp />);
+
+    await user.type(screen.getByLabelText("访问密钥"), "secret");
+    await user.click(screen.getByRole("button", { name: "进入" }));
+    await waitFor(() => {
+      expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "开启验证码通知" }));
+    await user.selectOptions(screen.getByLabelText("已读状态"), "read");
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/messages?readState=read");
+      expect(notification).toHaveBeenCalledWith(
+        "收到验证码短信",
+        expect.objectContaining({
+          body: "955xx · Redmi 1 · SIM 1"
+        })
+      );
+    });
   });
 });

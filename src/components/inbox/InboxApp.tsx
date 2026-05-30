@@ -29,32 +29,70 @@ const emptyInbox: InboxResponse = {
   }
 };
 
-export function InboxApp() {
-  const [authenticated, setAuthenticated] = useState(false);
+type InboxAppProps = {
+  initialAuthenticated?: boolean;
+};
+
+function hasVisibleNotificationFeed(filters: MessageFilters) {
+  return (
+    (!filters.readState || filters.readState === "all") &&
+    !filters.category &&
+    !filters.sourceId
+  );
+}
+
+export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
+  const [authenticated, setAuthenticated] = useState(initialAuthenticated);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [pendingAccess, setPendingAccess] = useState(false);
   const [filters, setFilters] = useState<MessageFilters>({ readState: "all" });
   const [inbox, setInbox] = useState<InboxResponse>(emptyInbox);
   const [inboxError, setInboxError] = useState<string | null>(null);
   const [inboxLoaded, setInboxLoaded] = useState(false);
+  const [notificationMessages, setNotificationMessages] = useState<
+    InboxResponse["messages"]
+  >([]);
+  const [notificationMessagesLoaded, setNotificationMessagesLoaded] =
+    useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
-  useVerificationNotifications(inbox.messages, notificationsEnabled, inboxLoaded);
+  useVerificationNotifications(
+    notificationMessages,
+    notificationsEnabled,
+    notificationMessagesLoaded
+  );
 
   const loadMessages = useCallback(async () => {
     const nextInbox = await fetchMessages(filters);
     setInbox(nextInbox);
     setInboxLoaded(true);
+
+    if (hasVisibleNotificationFeed(filters)) {
+      setNotificationMessages(nextInbox.messages);
+      setNotificationMessagesLoaded(true);
+    }
+
     setInboxError(null);
+  }, [filters]);
+
+  const loadNotificationMessages = useCallback(async () => {
+    if (hasVisibleNotificationFeed(filters)) {
+      return;
+    }
+
+    const nextInbox = await fetchMessages({ readState: "all" });
+    setNotificationMessages(nextInbox.messages);
+    setNotificationMessagesLoaded(true);
   }, [filters]);
 
   const refreshMessages = useCallback(async () => {
     try {
       await loadMessages();
+      await loadNotificationMessages();
     } catch {
       setInboxError("短信刷新失败");
     }
-  }, [loadMessages]);
+  }, [loadMessages, loadNotificationMessages]);
 
   async function handleAccessSubmit(accessKey: string) {
     setPendingAccess(true);

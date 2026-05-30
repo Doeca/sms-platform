@@ -2,8 +2,8 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildAccessCookie } from "@/server/auth";
 import { prisma } from "@/server/db/prisma";
 import { resetDatabase } from "@/server/db/test-utils";
-import { saveIncomingMessage } from "@/server/messages/repository";
-import { GET } from "./route";
+import { listMessages, saveIncomingMessage } from "@/server/messages/repository";
+import { GET, handleListRequest } from "./route";
 
 beforeEach(async () => {
   vi.stubEnv("WEB_ACCESS_KEY", "web-secret");
@@ -101,5 +101,18 @@ describe("GET /api/messages", () => {
     );
 
     expect(response.status).toBe(400);
+  });
+
+  it("returns stable JSON when loading messages fails", async () => {
+    const response = await handleListRequest(authedRequest(), {
+      list: vi.fn(async () => {
+        throw new Error("database down");
+      }) as typeof listMessages
+    });
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "Failed to load messages"
+    });
   });
 });

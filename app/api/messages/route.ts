@@ -5,6 +5,10 @@ import { listMessages } from "@/server/messages/repository";
 import { listMessagesQuerySchema } from "@/server/messages/schemas";
 
 type ListMessage = Awaited<ReturnType<typeof listMessages>>["messages"][number];
+type ListDependencies = {
+  list: typeof listMessages;
+};
+
 const singleValueQueryKeys = [
   "readState",
   "category",
@@ -34,7 +38,10 @@ function serializeMessage(message: ListMessage) {
   };
 }
 
-export async function GET(request: Request) {
+export async function handleListRequest(
+  request: Request,
+  dependencies: ListDependencies
+) {
   if (!hasValidAccessCookie(request.headers.get("cookie"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -53,7 +60,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Invalid query" }, { status: 400 });
   }
 
-  const result = await listMessages(parsed.data);
+  let result: Awaited<ReturnType<typeof listMessages>>;
+
+  try {
+    result = await dependencies.list(parsed.data);
+  } catch {
+    return NextResponse.json({ error: "Failed to load messages" }, { status: 500 });
+  }
 
   return NextResponse.json({
     messages: result.messages.map(serializeMessage),
@@ -65,5 +78,11 @@ export async function GET(request: Request) {
       label: formatSourceLabel(source)
     })),
     stats: result.stats
+  });
+}
+
+export async function GET(request: Request) {
+  return handleListRequest(request, {
+    list: listMessages
   });
 }
