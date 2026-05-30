@@ -8,12 +8,12 @@
     "start": "node node_modules/next/dist/bin/next start",
     "test": "node node_modules/vitest/vitest.mjs run --pool threads",
     "test:watch": "node node_modules/vitest/vitest.mjs --pool threads",
-    "db:generate": "prisma generate",
-    "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "db:generate": "node node_modules/prisma/build/index.js generate",
+    "db:push": "node node_modules/prisma/build/index.js db push",
+    "db:studio": "node node_modules/prisma/build/index.js studio"
   },
   "dependencies": {
-    "@prisma/client": "7.8.0",
+    "@prisma/client": "6.19.3",
     "lucide-react": "1.17.0",
     "next": "16.2.6",
     "react": "19.2.6",
@@ -28,7 +28,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "jsdom": "29.1.1",
-    "prisma": "7.8.0",
+    "prisma": "6.19.3",
     "typescript": "^5.9.0",
     "vitest": "4.1.7"
   }
