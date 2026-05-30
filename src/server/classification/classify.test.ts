@@ -58,6 +58,8 @@ describe("classifyMessage", () => {
 
   it("defaults invalid KIMI_TIMEOUT_MS values to 8000", async () => {
     vi.stubEnv("KIMI_API_KEY", "key");
+    vi.stubEnv("KIMI_BASE_URL", "   ");
+    vi.stubEnv("KIMI_MODEL", "");
     vi.stubEnv("KIMI_TIMEOUT_MS", "not-a-number");
 
     const classifyWithKimi = vi.fn(async () => "other" as const);
@@ -78,6 +80,8 @@ describe("classifyMessage", () => {
     expect(classifyWithKimi).toHaveBeenCalledWith(
       "普通通知",
       expect.objectContaining({
+        baseUrl: "https://api.moonshot.cn/v1",
+        model: "kimi-k2.6",
         timeoutMs: 8000
       })
     );

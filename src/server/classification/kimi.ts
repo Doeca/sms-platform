@@ -37,6 +37,7 @@ export async function classifyWithKimi(
     throw new Error("KIMI_API_KEY is not configured");
   }
 
+  const apiKey = config.apiKey.trim();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
   const fetchImpl = config.fetchImpl ?? fetch;
@@ -48,7 +49,7 @@ export async function classifyWithKimi(
         method: "POST",
         signal: controller.signal,
         headers: {
-          Authorization: `Bearer ${config.apiKey}`,
+          Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({

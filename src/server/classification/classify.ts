@@ -16,11 +16,20 @@ function parseKimiTimeoutMs(value: string | undefined): number {
   return 8000;
 }
 
+function getNonBlankEnvValue(value: string | undefined, fallback: string): string {
+  const normalized = value?.trim();
+
+  return normalized ? normalized : fallback;
+}
+
 function getKimiConfig() {
   return {
     apiKey: process.env.KIMI_API_KEY ?? "",
-    baseUrl: process.env.KIMI_BASE_URL ?? "https://api.moonshot.cn/v1",
-    model: process.env.KIMI_MODEL ?? "kimi-k2.6",
+    baseUrl: getNonBlankEnvValue(
+      process.env.KIMI_BASE_URL,
+      "https://api.moonshot.cn/v1"
+    ),
+    model: getNonBlankEnvValue(process.env.KIMI_MODEL, "kimi-k2.6"),
     timeoutMs: parseKimiTimeoutMs(process.env.KIMI_TIMEOUT_MS)
   };
 }

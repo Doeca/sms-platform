@@ -17,7 +17,7 @@ describe("classifyWithKimi", () => {
 
     await expect(
       classifyWithKimi("请尽快还款", {
-        apiKey: "key",
+        apiKey: " key ",
         baseUrl: "https://api.moonshot.cn/v1",
         model: "kimi-k2.6",
         timeoutMs: 8000,
@@ -35,6 +35,28 @@ describe("classifyWithKimi", () => {
         })
       })
     );
+
+    const fetchCalls = fetchImpl.mock.calls as unknown as Array<
+      [RequestInfo | URL, RequestInit?]
+    >;
+    const requestInit = fetchCalls[0]?.[1];
+    const requestBody = JSON.parse(String(requestInit?.body)) as {
+      model?: unknown;
+      messages?: unknown[];
+      response_format?: unknown;
+      max_completion_tokens?: unknown;
+      stream?: unknown;
+    };
+
+    expect(requestBody).toEqual(
+      expect.objectContaining({
+        model: "kimi-k2.6",
+        response_format: { type: "json_object" },
+        max_completion_tokens: 50,
+        stream: false
+      })
+    );
+    expect(requestBody.messages).toHaveLength(2);
   });
 
   it("throws for invalid response categories", async () => {
