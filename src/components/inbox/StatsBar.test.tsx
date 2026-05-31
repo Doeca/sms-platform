@@ -11,7 +11,12 @@ describe("StatsBar", () => {
           unread: 3,
           verification: 2,
           loan_collection: 4,
-          other: 4
+          other: 4,
+          unreadByCategory: {
+            verification: 0,
+            loan_collection: 0,
+            other: 0
+          }
         }}
       />
     );

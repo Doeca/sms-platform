@@ -25,7 +25,12 @@ const emptyInbox: InboxResponse = {
     unread: 0,
     verification: 0,
     loan_collection: 0,
-    other: 0
+    other: 0,
+    unreadByCategory: {
+      verification: 0,
+      loan_collection: 0,
+      other: 0
+    }
   }
 };
 
