@@ -6,16 +6,17 @@ import {
   fetchMessages,
   updateMessage,
   type ClientCategory,
-  type InboxResponse,
-  type MessageFilters
+  type ClientReadState,
+  type InboxResponse
 } from "@/client/api";
 import { AccessForm } from "@/components/access/AccessForm";
 import { useVerificationNotifications } from "@/hooks/useVerificationNotifications";
 import { POLL_INTERVAL_MS } from "@/lib/app-info";
-import { FilterBar } from "./FilterBar";
+import { CategoryTabs } from "./CategoryTabs";
+import { getEmptyMessage } from "./category-config";
 import { MessageList } from "./MessageList";
 import { NotificationToggle } from "./NotificationToggle";
-import { StatsBar } from "./StatsBar";
+import { ReadFilterMenu } from "./ReadFilterMenu";
 
 const emptyInbox: InboxResponse = {
   messages: [],
@@ -38,28 +39,26 @@ type InboxAppProps = {
   initialAuthenticated?: boolean;
 };
 
-function hasVisibleNotificationFeed(filters: MessageFilters) {
-  return (
-    (!filters.readState || filters.readState === "all") &&
-    !filters.category &&
-    !filters.sourceId
-  );
-}
-
 export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   const [authenticated, setAuthenticated] = useState(initialAuthenticated);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [pendingAccess, setPendingAccess] = useState(false);
-  const [filters, setFilters] = useState<MessageFilters>({ readState: "all" });
+  const [activeCategory, setActiveCategory] =
+    useState<ClientCategory>("verification");
+  const [readState, setReadState] = useState<ClientReadState>("all");
   const [inbox, setInbox] = useState<InboxResponse>(emptyInbox);
   const [inboxError, setInboxError] = useState<string | null>(null);
-  const [inboxLoaded, setInboxLoaded] = useState(false);
   const [notificationMessages, setNotificationMessages] = useState<
     InboxResponse["messages"]
   >([]);
   const [notificationMessagesLoaded, setNotificationMessagesLoaded] =
     useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [pendingBulkRead, setPendingBulkRead] = useState(false);
 
   useVerificationNotifications(
     notificationMessages,
@@ -68,27 +67,19 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   );
 
   const loadMessages = useCallback(async () => {
-    const nextInbox = await fetchMessages(filters);
+    const nextInbox = await fetchMessages({
+      readState,
+      category: activeCategory
+    });
     setInbox(nextInbox);
-    setInboxLoaded(true);
-
-    if (hasVisibleNotificationFeed(filters)) {
-      setNotificationMessages(nextInbox.messages);
-      setNotificationMessagesLoaded(true);
-    }
-
     setInboxError(null);
-  }, [filters]);
+  }, [activeCategory, readState]);
 
   const loadNotificationMessages = useCallback(async () => {
-    if (hasVisibleNotificationFeed(filters)) {
-      return;
-    }
-
     const nextInbox = await fetchMessages({ readState: "all" });
     setNotificationMessages(nextInbox.messages);
     setNotificationMessagesLoaded(true);
-  }, [filters]);
+  }, []);
 
   const refreshMessages = useCallback(async () => {
     try {
@@ -113,21 +104,68 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
     }
   }
 
-  async function handleReadToggle(id: string, isRead: boolean) {
+  function clearSelection() {
+    setSelectedMessageIds(new Set());
+    setSelectMode(false);
+  }
+
+  function handleCategoryChange(category: ClientCategory) {
+    setActiveCategory(category);
+    clearSelection();
+  }
+
+  function handleReadStateChange(nextReadState: ClientReadState) {
+    setReadState(nextReadState);
+    clearSelection();
+  }
+
+  function handleSelectionToggle(id: string) {
+    setSelectedMessageIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+
+      return next;
+    });
+  }
+
+  async function handleCategoryUpdate(id: string, category: ClientCategory) {
     try {
-      await updateMessage(id, { isRead });
+      await updateMessage(id, { category });
       await loadMessages();
     } catch {
       setInboxError("短信更新失败");
     }
   }
 
-  async function handleCategoryChange(id: string, category: ClientCategory) {
+  async function handleBulkMarkRead() {
+    const selectedUnreadIds = inbox.messages
+      .filter((message) => selectedMessageIds.has(message.id) && !message.isRead)
+      .map((message) => message.id);
+
+    if (selectedUnreadIds.length === 0 || pendingBulkRead) {
+      return;
+    }
+
+    setPendingBulkRead(true);
+    setInboxError(null);
+
     try {
-      await updateMessage(id, { category });
+      const results = await Promise.allSettled(
+        selectedUnreadIds.map((id) => updateMessage(id, { isRead: true }))
+      );
       await loadMessages();
-    } catch {
-      setInboxError("短信更新失败");
+      clearSelection();
+
+      if (results.some((result) => result.status === "rejected")) {
+        setInboxError("部分短信更新失败");
+      }
+    } finally {
+      setPendingBulkRead(false);
     }
   }
 
@@ -154,6 +192,10 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
     );
   }
 
+  const selectedUnreadCount = inbox.messages.filter(
+    (message) => selectedMessageIds.has(message.id) && !message.isRead
+  ).length;
+
   return (
     <main className="app-shell">
       <header className="page-header">
@@ -161,20 +203,63 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
           <h1>SMS Inbox</h1>
           <p>短信聚合收件箱</p>
         </div>
-        <NotificationToggle
-          enabled={notificationsEnabled}
-          onEnabledChange={setNotificationsEnabled}
-        />
+        <div className="page-actions">
+          <NotificationToggle
+            enabled={notificationsEnabled}
+            onEnabledChange={setNotificationsEnabled}
+          />
+          <ReadFilterMenu
+            readState={readState}
+            onChange={handleReadStateChange}
+          />
+          <button
+            className="toolbar-button"
+            onClick={() => {
+              if (selectMode) {
+                clearSelection();
+              } else {
+                setSelectMode(true);
+              }
+            }}
+            type="button"
+          >
+            {selectMode ? "完成" : "选择"}
+          </button>
+        </div>
       </header>
 
-      <StatsBar stats={inbox.stats} />
-      {inboxError ? <p className="form-error">{inboxError}</p> : null}
-      <FilterBar filters={filters} sources={inbox.sources} onChange={setFilters} />
-      <MessageList
-        messages={inbox.messages}
-        onReadToggle={handleReadToggle}
-        onCategoryChange={handleCategoryChange}
+      <CategoryTabs
+        activeCategory={activeCategory}
+        stats={inbox.stats}
+        onChange={handleCategoryChange}
       />
+      {inboxError ? <p className="form-error">{inboxError}</p> : null}
+      <MessageList
+        emptyMessage={getEmptyMessage(activeCategory, readState)}
+        messages={inbox.messages}
+        selectedIds={selectedMessageIds}
+        selectMode={selectMode}
+        onCategoryChange={handleCategoryUpdate}
+        onSelectionToggle={handleSelectionToggle}
+      />
+
+      {selectMode ? (
+        <div className="bulk-action-bar" role="region" aria-label="批量操作">
+          <span>已选择 {selectedMessageIds.size} 条</span>
+          <div className="bulk-action-bar__actions">
+            <button
+              disabled={pendingBulkRead || selectedUnreadCount === 0}
+              onClick={() => void handleBulkMarkRead()}
+              type="button"
+            >
+              标记已读
+            </button>
+            <button onClick={clearSelection} type="button">
+              取消
+            </button>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

@@ -39,7 +39,12 @@ const inboxPayload = {
     unread: 1,
     verification: 1,
     loan_collection: 0,
-    other: 0
+    other: 0,
+    unreadByCategory: {
+      verification: 1,
+      loan_collection: 0,
+      other: 0
+    }
   }
 };
 
@@ -51,7 +56,12 @@ const emptyInboxPayload = {
     unread: 0,
     verification: 0,
     loan_collection: 0,
-    other: 0
+    other: 0,
+    unreadByCategory: {
+      verification: 0,
+      loan_collection: 0,
+      other: 0
+    }
   }
 };
 
@@ -69,7 +79,11 @@ const secondVerificationPayload = {
     ...inboxPayload.stats,
     all: 2,
     unread: 2,
-    verification: 2
+    verification: 2,
+    unreadByCategory: {
+      ...inboxPayload.stats.unreadByCategory,
+      verification: 2
+    }
   }
 };
 
@@ -102,10 +116,8 @@ describe("InboxApp", () => {
       expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
     });
 
-    const inboxFetchCount = (fetch as ReturnType<typeof vi.fn>).mock.calls.filter(
-      ([url]) => url === "/api/messages"
-    ).length;
-    expect(inboxFetchCount).toBe(1);
+    expect(fetch).toHaveBeenCalledWith("/api/messages?category=verification");
+    expect(fetch).toHaveBeenCalledWith("/api/messages");
   });
 
   it("loads the inbox immediately when a valid access cookie is already present", async () => {
@@ -120,6 +132,7 @@ describe("InboxApp", () => {
       expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
     });
     expect(screen.queryByLabelText("访问密钥")).not.toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith("/api/messages?category=verification");
     expect(fetch).toHaveBeenCalledWith("/api/messages");
   });
 
@@ -141,7 +154,7 @@ describe("InboxApp", () => {
     });
   });
 
-  it("refreshes messages when filters change", async () => {
+  it("combines the active category tab with the read-state filter", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url === "/api/auth/access") {
         return Response.json({ ok: true });
@@ -161,14 +174,27 @@ describe("InboxApp", () => {
       expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
     });
 
-    await user.selectOptions(screen.getByLabelText("已读状态"), "unread");
+    await user.click(screen.getByRole("tab", { name: "金融" }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/messages?readState=unread");
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/messages?category=loan_collection"
+      );
     });
+
+    await user.click(screen.getByRole("button", { name: "筛选" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "未读" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/messages?readState=unread&category=loan_collection"
+      );
+    });
+
+    expect(screen.queryByText("来源")).not.toBeInTheDocument();
   });
 
-  it("refreshes messages after read and category actions", async () => {
+  it("refreshes messages after compact category actions", async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url === "/api/auth/access") {
         return Response.json({ ok: true });
@@ -192,17 +218,9 @@ describe("InboxApp", () => {
       expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: "标记已读" }));
     await user.selectOptions(screen.getByLabelText("修改分类"), "other");
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/messages/msg-1",
-        expect.objectContaining({
-          body: JSON.stringify({ isRead: true }),
-          method: "PATCH"
-        })
-      );
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/messages/msg-1",
         expect.objectContaining({
@@ -211,11 +229,6 @@ describe("InboxApp", () => {
         })
       );
     });
-
-    const inboxFetchCount = fetchMock.mock.calls.filter(
-      ([url]) => url === "/api/messages"
-    ).length;
-    expect(inboxFetchCount).toBeGreaterThanOrEqual(3);
   });
 
   it("polls for new messages after access succeeds", async () => {
@@ -267,7 +280,7 @@ describe("InboxApp", () => {
     });
   });
 
-  it("shows a stable error when message updates fail", async () => {
+  it("shows a stable error when category updates fail", async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url === "/api/auth/access") {
         return Response.json({ ok: true });
@@ -291,11 +304,88 @@ describe("InboxApp", () => {
       expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: "标记已读" }));
+    await user.selectOptions(screen.getByLabelText("修改分类"), "other");
 
     await waitFor(() => {
       expect(screen.getByText("短信更新失败")).toBeInTheDocument();
     });
+  });
+
+  it("selects multiple messages and marks unread selections as read", async () => {
+    const twoMessagePayload = {
+      ...inboxPayload,
+      messages: [
+        inboxPayload.messages[0],
+        {
+          ...inboxPayload.messages[0],
+          id: "msg-2",
+          sender: "10086",
+          body: "第二条未读验证码",
+          receivedAt: "2026-05-30T08:31:00.000Z"
+        }
+      ],
+      stats: {
+        ...inboxPayload.stats,
+        all: 2,
+        unread: 2,
+        verification: 2,
+        unreadByCategory: {
+          verification: 2,
+          loan_collection: 0,
+          other: 0
+        }
+      }
+    };
+
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/api/auth/access") {
+        return Response.json({ ok: true });
+      }
+
+      if (
+        (url === "/api/messages/msg-1" || url === "/api/messages/msg-2") &&
+        init?.method === "PATCH"
+      ) {
+        return Response.json({ message: twoMessagePayload.messages[0] });
+      }
+
+      return Response.json(twoMessagePayload);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const user = userEvent.setup();
+
+    render(<InboxApp />);
+
+    await user.type(screen.getByLabelText("访问密钥"), "secret");
+    await user.click(screen.getByRole("button", { name: "进入" }));
+    await waitFor(() => {
+      expect(screen.getByText("第二条未读验证码")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "选择" }));
+    await user.click(screen.getByRole("button", { name: "短信 955xx" }));
+    await user.click(screen.getByRole("button", { name: "短信 10086" }));
+    await user.click(screen.getByRole("button", { name: "标记已读" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/messages/msg-1",
+        expect.objectContaining({
+          body: JSON.stringify({ isRead: true }),
+          method: "PATCH"
+        })
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/messages/msg-2",
+        expect.objectContaining({
+          body: JSON.stringify({ isRead: true }),
+          method: "PATCH"
+        })
+      );
+    });
+
+    expect(screen.queryByText("已选择 2 条")).not.toBeInTheDocument();
   });
 
   it("does not notify for messages already loaded before enabling notifications", async () => {
@@ -383,13 +473,21 @@ describe("InboxApp", () => {
         return Response.json({ ok: true });
       }
 
-      if (url === "/api/messages?readState=read") {
+      if (url === "/api/messages?readState=read&category=verification") {
         return Response.json(emptyInboxPayload);
       }
 
-      allMessagesFetches += 1;
+      if (url === "/api/messages") {
+        allMessagesFetches += 1;
+        return Response.json(
+          allMessagesFetches === 1 ? inboxPayload : secondVerificationPayload
+        );
+      }
+
       return Response.json(
-        allMessagesFetches === 1 ? inboxPayload : secondVerificationPayload
+        url === "/api/messages?category=verification"
+          ? inboxPayload
+          : secondVerificationPayload
       );
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -403,10 +501,13 @@ describe("InboxApp", () => {
       expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
     });
     await user.click(screen.getByRole("button", { name: "开启验证码通知" }));
-    await user.selectOptions(screen.getByLabelText("已读状态"), "read");
+    await user.click(screen.getByRole("button", { name: "筛选" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "已读" }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/messages?readState=read");
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/messages?readState=read&category=verification"
+      );
       expect(notification).toHaveBeenCalledWith(
         "收到验证码短信",
         expect.objectContaining({
