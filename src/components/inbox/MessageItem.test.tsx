@@ -89,7 +89,7 @@ describe("MessageItem", () => {
     expect(onCategoryChange).toHaveBeenCalledWith("msg-1", "other");
   });
 
-  it("uses selection controls instead of the unread dot in select mode", async () => {
+  it("uses the row target instead of the unread dot in select mode", async () => {
     const onSelectionToggle = vi.fn();
     const user = userEvent.setup();
 
@@ -105,7 +105,12 @@ describe("MessageItem", () => {
 
     expect(screen.queryByLabelText("未读")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "选择 955xx" }));
+    const row = screen.getByRole("button", { name: "短信 955xx" });
+
+    expect(row).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByRole("button", { name: "选择 955xx" })).not.toBeInTheDocument();
+
+    await user.click(row);
 
     expect(onSelectionToggle).toHaveBeenCalledWith("msg-1");
   });

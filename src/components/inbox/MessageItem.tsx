@@ -79,17 +79,12 @@ export function MessageItem({
       tabIndex={selectMode ? 0 : undefined}
     >
       {selectMode ? (
-        <button
-          type="button"
-          aria-pressed={selected}
+        <span
+          aria-hidden="true"
           className="message-item__select-control"
-          onClick={(event) => {
-            event.stopPropagation();
-            toggleSelection();
-          }}
         >
-          {selected ? `取消选择 ${message.sender}` : `选择 ${message.sender}`}
-        </button>
+          {selected ? "✓" : ""}
+        </span>
       ) : message.isRead ? (
         <span aria-hidden="true" className="message-item__unread-spacer" />
       ) : (
