@@ -303,6 +303,95 @@ describe("InboxApp", () => {
     });
   });
 
+  it("refreshes category updates with the current visible filters", async () => {
+    const pendingPatch = createDeferredResponse();
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/api/auth/access") {
+        return Response.json({ ok: true });
+      }
+
+      if (url === "/api/messages/msg-1" && init?.method === "PATCH") {
+        return pendingPatch.promise;
+      }
+
+      if (url === "/api/messages?category=loan_collection") {
+        return Response.json(financialPayload);
+      }
+
+      return Response.json(inboxPayload);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const user = userEvent.setup();
+
+    render(<InboxApp />);
+
+    await user.type(screen.getByLabelText("访问密钥"), "secret");
+    await user.click(screen.getByRole("button", { name: "进入" }));
+    await waitFor(() => {
+      expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
+    });
+
+    await user.selectOptions(screen.getByLabelText("修改分类"), "other");
+    await user.click(screen.getByRole("tab", { name: "金融" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("还款提醒")).toBeInTheDocument();
+    });
+
+    pendingPatch.resolve(Response.json({ message: inboxPayload.messages[0] }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/messages?category=loan_collection"
+      );
+    });
+
+    const verificationFetchCount = fetchMock.mock.calls.filter(
+      ([url]) => url === "/api/messages?category=verification"
+    ).length;
+    expect(verificationFetchCount).toBe(1);
+    expect(screen.getByText("还款提醒")).toBeInTheDocument();
+    expect(screen.queryByText("您的验证码是 123456")).not.toBeInTheDocument();
+  });
+
+  it("keeps the initial visible fetch alive for active tab and current read no-ops", async () => {
+    const delayedVisible = createDeferredResponse();
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/messages?category=verification") {
+        return delayedVisible.promise;
+      }
+
+      return Response.json(inboxPayload);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const user = userEvent.setup();
+
+    render(<InboxApp initialAuthenticated />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/messages?category=verification"
+      );
+    });
+
+    await user.click(screen.getByRole("tab", { name: "验证码" }));
+    await user.click(screen.getByRole("button", { name: "筛选" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "全部" }));
+
+    delayedVisible.resolve(Response.json(inboxPayload));
+
+    await waitFor(() => {
+      expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
+    });
+
+    const visibleFetchCount = fetchMock.mock.calls.filter(
+      ([url]) => url === "/api/messages?category=verification"
+    ).length;
+    expect(visibleFetchCount).toBe(1);
+  });
+
   it("polls for new messages after access succeeds", async () => {
     vi.useFakeTimers();
     const fetchMock = vi.fn(async (url: string) => {

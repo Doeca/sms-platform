@@ -39,6 +39,11 @@ type InboxAppProps = {
   initialAuthenticated?: boolean;
 };
 
+type VisibleFilters = {
+  category: ClientCategory;
+  readState: ClientReadState;
+};
+
 export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   const [authenticated, setAuthenticated] = useState(initialAuthenticated);
   const [accessError, setAccessError] = useState<string | null>(null);
@@ -60,6 +65,10 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   );
   const [pendingBulkRead, setPendingBulkRead] = useState(false);
   const visibleRequestSequence = useRef(0);
+  const currentVisibleFiltersRef = useRef<VisibleFilters>({
+    category: "verification",
+    readState: "all"
+  });
 
   function invalidateVisibleRequests() {
     visibleRequestSequence.current += 1;
@@ -74,11 +83,12 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
 
   const loadMessages = useCallback(async () => {
     const requestSequence = invalidateVisibleRequests();
+    const { category, readState } = currentVisibleFiltersRef.current;
 
     try {
       const nextInbox = await fetchMessages({
         readState,
-        category: activeCategory
+        category
       });
 
       if (requestSequence !== visibleRequestSequence.current) {
@@ -92,7 +102,7 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
         throw error;
       }
     }
-  }, [activeCategory, readState]);
+  }, []);
 
   const loadNotificationMessages = useCallback(async () => {
     const nextInbox = await fetchMessages({ readState: "all" });
@@ -131,7 +141,13 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   }
 
   function handleCategoryChange(category: ClientCategory) {
-    if (category !== activeCategory) {
+    const currentFilters = currentVisibleFiltersRef.current;
+
+    if (category !== currentFilters.category) {
+      currentVisibleFiltersRef.current = {
+        ...currentFilters,
+        category
+      };
       invalidateVisibleRequests();
     }
 
@@ -140,7 +156,13 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   }
 
   function handleReadStateChange(nextReadState: ClientReadState) {
-    if (nextReadState !== readState) {
+    const currentFilters = currentVisibleFiltersRef.current;
+
+    if (nextReadState !== currentFilters.readState) {
+      currentVisibleFiltersRef.current = {
+        ...currentFilters,
+        readState: nextReadState
+      };
       invalidateVisibleRequests();
     }
 
@@ -213,6 +235,13 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   }
 
   useEffect(() => {
+    currentVisibleFiltersRef.current = {
+      category: activeCategory,
+      readState
+    };
+  }, [activeCategory, readState]);
+
+  useEffect(() => {
     if (!authenticated) {
       return;
     }
@@ -223,7 +252,7 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
     }, POLL_INTERVAL_MS);
 
     return () => window.clearInterval(interval);
-  }, [authenticated, refreshMessages]);
+  }, [activeCategory, authenticated, readState, refreshMessages]);
 
   if (!authenticated) {
     return (
