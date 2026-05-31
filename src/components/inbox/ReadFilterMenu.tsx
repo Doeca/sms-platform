@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import type { ClientReadState } from "@/client/api";
 
@@ -21,20 +21,82 @@ function getReadStateLabel(readState: ClientReadState) {
 
 export function ReadFilterMenu({ readState, onChange }: ReadFilterMenuProps) {
   const [open, setOpen] = useState(false);
+  const menuId = useId();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const activeLabel = getReadStateLabel(readState);
   const buttonLabel = readState === "all" ? "筛选" : `筛选 ${activeLabel}`;
+  const activeIndex = Math.max(
+    readStateOptions.findIndex(([value]) => value === readState),
+    0
+  );
+
+  useEffect(() => {
+    if (open) {
+      optionRefs.current[activeIndex]?.focus();
+    }
+  }, [activeIndex, open]);
 
   function handleChange(nextReadState: ClientReadState) {
     onChange(nextReadState);
     setOpen(false);
   }
 
+  function focusOption(index: number) {
+    optionRefs.current[index]?.focus();
+  }
+
+  function getFocusedOptionIndex() {
+    const focusedIndex = optionRefs.current.findIndex(
+      (option) => option === document.activeElement
+    );
+
+    return focusedIndex === -1 ? activeIndex : focusedIndex;
+  }
+
+  function handleOptionKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    switch (event.key) {
+      case "ArrowDown": {
+        event.preventDefault();
+        focusOption((getFocusedOptionIndex() + 1) % readStateOptions.length);
+        break;
+      }
+      case "ArrowUp": {
+        event.preventDefault();
+        focusOption(
+          (getFocusedOptionIndex() - 1 + readStateOptions.length) %
+            readStateOptions.length
+        );
+        break;
+      }
+      case "Home": {
+        event.preventDefault();
+        focusOption(0);
+        break;
+      }
+      case "End": {
+        event.preventDefault();
+        focusOption(readStateOptions.length - 1);
+        break;
+      }
+      case "Escape": {
+        event.preventDefault();
+        setOpen(false);
+        triggerRef.current?.focus();
+        break;
+      }
+    }
+  }
+
   return (
     <div className="read-filter">
       <button
+        aria-controls={open ? menuId : undefined}
         aria-expanded={open}
+        aria-haspopup="menu"
         className="toolbar-button"
         onClick={() => setOpen((current) => !current)}
+        ref={triggerRef}
         type="button"
       >
         <SlidersHorizontal size={16} />
@@ -45,14 +107,19 @@ export function ReadFilterMenu({ readState, onChange }: ReadFilterMenuProps) {
         <div
           aria-label="已读状态筛选"
           className="read-filter__menu"
+          id={menuId}
           role="menu"
         >
-          {readStateOptions.map(([value, label]) => (
+          {readStateOptions.map(([value, label], index) => (
             <button
               aria-checked={readState === value}
               className="read-filter__option"
               key={value}
               onClick={() => handleChange(value)}
+              onKeyDown={handleOptionKeyDown}
+              ref={(element) => {
+                optionRefs.current[index] = element;
+              }}
               role="menuitemradio"
               type="button"
             >
