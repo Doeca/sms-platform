@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { KeyboardEvent } from "react";
 import type { ClientCategory, ClientMessage } from "@/client/api";
 
 type MessageItemProps = {
@@ -52,13 +53,30 @@ export function MessageItem({
     onSelectionToggle(message.id);
   }
 
+  function handleRowKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    toggleSelection();
+  }
+
   return (
     <article
       aria-label={`短信 ${message.sender}`}
+      aria-pressed={selectMode ? selected : undefined}
       className={`message-item ${
         message.isRead ? "is-read" : "is-unread"
       }${selectedClass}${modeClass}`}
       onClick={selectMode ? toggleSelection : undefined}
+      onKeyDown={selectMode ? handleRowKeyDown : undefined}
+      role={selectMode ? "button" : undefined}
+      tabIndex={selectMode ? 0 : undefined}
     >
       {selectMode ? (
         <button

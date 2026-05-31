@@ -68,6 +68,27 @@ describe("MessageItem", () => {
     expect(onCategoryChange).toHaveBeenCalledWith("msg-1", "other");
   });
 
+  it("prevents overlapping category changes while pending", async () => {
+    const onCategoryChange = vi.fn(() => new Promise<void>(() => undefined));
+    const user = userEvent.setup();
+
+    render(
+      <MessageItem
+        message={message}
+        onCategoryChange={onCategoryChange}
+        onSelectionToggle={() => undefined}
+      />
+    );
+
+    const categoryControl = screen.getByLabelText("修改分类");
+
+    await user.selectOptions(categoryControl, "other");
+    await user.selectOptions(categoryControl, "loan_collection");
+
+    expect(onCategoryChange).toHaveBeenCalledTimes(1);
+    expect(onCategoryChange).toHaveBeenCalledWith("msg-1", "other");
+  });
+
   it("uses selection controls instead of the unread dot in select mode", async () => {
     const onSelectionToggle = vi.fn();
     const user = userEvent.setup();
@@ -106,5 +127,32 @@ describe("MessageItem", () => {
     await user.click(screen.getByLabelText("短信 955xx"));
 
     expect(onSelectionToggle).toHaveBeenCalledWith("msg-1");
+  });
+
+  it("toggles selection from the keyboard when the row is focused in select mode", async () => {
+    const onSelectionToggle = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <MessageItem
+        message={message}
+        selected={false}
+        selectMode
+        onCategoryChange={async () => undefined}
+        onSelectionToggle={onSelectionToggle}
+      />
+    );
+
+    const row = screen.getByLabelText("短信 955xx");
+
+    expect(row).toHaveAttribute("tabIndex", "0");
+
+    row.focus();
+    await user.keyboard("{Enter}");
+    await user.keyboard(" ");
+
+    expect(onSelectionToggle).toHaveBeenCalledTimes(2);
+    expect(onSelectionToggle).toHaveBeenNthCalledWith(1, "msg-1");
+    expect(onSelectionToggle).toHaveBeenNthCalledWith(2, "msg-1");
   });
 });
