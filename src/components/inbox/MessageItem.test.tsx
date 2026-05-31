@@ -68,6 +68,21 @@ describe("MessageItem", () => {
     expect(onCategoryChange).toHaveBeenCalledWith("msg-1", "other");
   });
 
+  it("omits the scan row category badge while keeping category correction", () => {
+    const { container } = render(
+      <MessageItem
+        message={message}
+        onCategoryChange={async () => undefined}
+        onSelectionToggle={() => undefined}
+      />
+    );
+
+    expect(
+      container.querySelector(".message-item__header .category")
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("修改分类")).toBeInTheDocument();
+  });
+
   it("prevents overlapping category changes while pending", async () => {
     const onCategoryChange = vi.fn(() => new Promise<void>(() => undefined));
     const user = userEvent.setup();

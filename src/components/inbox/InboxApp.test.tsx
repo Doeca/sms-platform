@@ -189,7 +189,7 @@ describe("InboxApp", () => {
     });
 
     expect(fetch).toHaveBeenCalledWith("/api/messages?category=verification");
-    expect(fetch).toHaveBeenCalledWith("/api/messages");
+    expect(fetch).not.toHaveBeenCalledWith("/api/messages");
   });
 
   it("loads the inbox immediately when a valid access cookie is already present", async () => {
@@ -205,7 +205,7 @@ describe("InboxApp", () => {
     });
     expect(screen.queryByLabelText("访问密钥")).not.toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith("/api/messages?category=verification");
-    expect(fetch).toHaveBeenCalledWith("/api/messages");
+    expect(fetch).not.toHaveBeenCalledWith("/api/messages");
   });
 
   it("shows an access error when the access key is rejected", async () => {
@@ -246,7 +246,7 @@ describe("InboxApp", () => {
       expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("tab", { name: "金融" }));
+    await user.click(screen.getByRole("button", { name: "金融" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -333,7 +333,7 @@ describe("InboxApp", () => {
     });
 
     await user.selectOptions(screen.getByLabelText("修改分类"), "other");
-    await user.click(screen.getByRole("tab", { name: "金融" }));
+    await user.click(screen.getByRole("button", { name: "金融" }));
 
     await waitFor(() => {
       expect(screen.getByText("还款提醒")).toBeInTheDocument();
@@ -350,7 +350,7 @@ describe("InboxApp", () => {
     const verificationFetchCount = fetchMock.mock.calls.filter(
       ([url]) => url === "/api/messages?category=verification"
     ).length;
-    expect(verificationFetchCount).toBe(1);
+    expect(verificationFetchCount).toBe(3);
     expect(screen.getByText("还款提醒")).toBeInTheDocument();
     expect(screen.queryByText("您的验证码是 123456")).not.toBeInTheDocument();
   });
@@ -376,7 +376,7 @@ describe("InboxApp", () => {
       );
     });
 
-    await user.click(screen.getByRole("tab", { name: "验证码" }));
+    await user.click(screen.getByRole("button", { name: "验证码" }));
     await user.click(screen.getByRole("button", { name: "筛选" }));
     await user.click(screen.getByRole("menuitemradio", { name: "全部" }));
 
@@ -389,7 +389,7 @@ describe("InboxApp", () => {
     const visibleFetchCount = fetchMock.mock.calls.filter(
       ([url]) => url === "/api/messages?category=verification"
     ).length;
-    expect(visibleFetchCount).toBe(1);
+    expect(visibleFetchCount).toBe(2);
   });
 
   it("polls for new messages after access succeeds", async () => {
@@ -633,7 +633,7 @@ describe("InboxApp", () => {
     await user.click(screen.getByRole("button", { name: "短信 955xx" }));
     expect(screen.getByText("已选择 1 条")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "金融" }));
+    await user.click(screen.getByRole("button", { name: "金融" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -699,11 +699,11 @@ describe("InboxApp", () => {
     };
     document.addEventListener("click", resolveOldVerificationDuringClick);
 
-    await user.click(screen.getByRole("tab", { name: "金融" }));
+    await user.click(screen.getByRole("button", { name: "金融" }));
 
-    expect(screen.getByRole("tab", { name: "金融" })).toHaveAttribute(
-      "aria-selected",
-      "true"
+    expect(screen.getByRole("button", { name: "金融" })).toHaveAttribute(
+      "aria-current",
+      "page"
     );
     expect(screen.queryByText("您的验证码是 123456")).not.toBeInTheDocument();
 
@@ -793,7 +793,7 @@ describe("InboxApp", () => {
       requestPermission: vi.fn(async () => "granted")
     });
 
-    let allMessagesFetches = 0;
+    let verificationFeedFetches = 0;
     const fetchMock = vi.fn(async (url: string) => {
       if (url === "/api/auth/access") {
         return Response.json({ ok: true });
@@ -803,18 +803,14 @@ describe("InboxApp", () => {
         return Response.json(emptyInboxPayload);
       }
 
-      if (url === "/api/messages") {
-        allMessagesFetches += 1;
+      if (url === "/api/messages?category=verification") {
+        verificationFeedFetches += 1;
         return Response.json(
-          allMessagesFetches === 1 ? inboxPayload : secondVerificationPayload
+          verificationFeedFetches <= 2 ? inboxPayload : secondVerificationPayload
         );
       }
 
-      return Response.json(
-        url === "/api/messages?category=verification"
-          ? inboxPayload
-          : secondVerificationPayload
-      );
+      return Response.json(secondVerificationPayload);
     });
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
@@ -834,6 +830,7 @@ describe("InboxApp", () => {
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/messages?readState=read&category=verification"
       );
+      expect(fetchMock).not.toHaveBeenCalledWith("/api/messages");
       expect(notification).toHaveBeenCalledWith(
         "收到验证码短信",
         expect.objectContaining({

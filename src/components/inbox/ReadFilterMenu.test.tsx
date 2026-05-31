@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ReadFilterMenu } from "./ReadFilterMenu";
@@ -127,5 +127,44 @@ describe("ReadFilterMenu", () => {
     expect(onChange).toHaveBeenCalledWith("read");
     expect(screen.queryByRole("menu", { name: "已读状态筛选" })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
+  });
+
+  it("closes when pointer interaction moves outside the menu", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <>
+        <ReadFilterMenu readState="all" onChange={() => undefined} />
+        <button type="button">外部操作</button>
+      </>
+    );
+
+    await user.click(screen.getByRole("button", { name: "筛选" }));
+    expect(screen.getByRole("menu", { name: "已读状态筛选" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "外部操作" }));
+
+    expect(screen.queryByRole("menu", { name: "已读状态筛选" })).not.toBeInTheDocument();
+  });
+
+  it("closes when focus moves outside the menu", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <>
+        <ReadFilterMenu readState="all" onChange={() => undefined} />
+        <button type="button">外部焦点</button>
+      </>
+    );
+
+    await user.click(screen.getByRole("button", { name: "筛选" }));
+    expect(screen.getByRole("menu", { name: "已读状态筛选" })).toBeInTheDocument();
+
+    const outsideButton = screen.getByRole("button", { name: "外部焦点" });
+    outsideButton.focus();
+    fireEvent.focusIn(outsideButton);
+
+    expect(outsideButton).toHaveFocus();
+    expect(screen.queryByRole("menu", { name: "已读状态筛选" })).not.toBeInTheDocument();
   });
 });

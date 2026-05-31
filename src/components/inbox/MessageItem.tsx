@@ -93,9 +93,6 @@ export function MessageItem({
 
       <div className="message-item__content">
         <header className="message-item__header">
-          <span className={`category category--${message.category}`}>
-            {categoryLabels[message.category]}
-          </span>
           <strong>{message.sender}</strong>
           <span>{message.source.label}</span>
           <time dateTime={message.receivedAt}>

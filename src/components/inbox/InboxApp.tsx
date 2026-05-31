@@ -105,7 +105,10 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   }, []);
 
   const loadNotificationMessages = useCallback(async () => {
-    const nextInbox = await fetchMessages({ readState: "all" });
+    const nextInbox = await fetchMessages({
+      readState: "all",
+      category: "verification"
+    });
     setNotificationMessages(nextInbox.messages);
     setNotificationMessagesLoaded(true);
   }, []);

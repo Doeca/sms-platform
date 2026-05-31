@@ -16,7 +16,7 @@ export function CategoryTabs({
 }: CategoryTabsProps) {
   return (
     <nav className="category-tabs" aria-label="短信分类">
-      <div className="category-tabs__track" role="tablist">
+      <div className="category-tabs__track">
         {inboxCategoryTabs.map((tab) => {
           const unreadCount = stats.unreadByCategory[tab.category];
           const selected = tab.category === activeCategory;
@@ -25,12 +25,11 @@ export function CategoryTabs({
 
           return (
             <button
+              aria-current={selected ? "page" : undefined}
               aria-label={label}
-              aria-selected={selected}
               className="category-tab"
               key={tab.category}
               onClick={() => onChange(tab.category)}
-              role="tab"
               type="button"
             >
               <span>{tab.label}</span>

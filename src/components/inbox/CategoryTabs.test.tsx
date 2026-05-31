@@ -17,7 +17,7 @@ const stats = {
 };
 
 describe("CategoryTabs", () => {
-  it("renders category tabs with unread badges", () => {
+  it("renders category buttons with unread badges", () => {
     render(
       <CategoryTabs
         activeCategory="verification"
@@ -26,15 +26,17 @@ describe("CategoryTabs", () => {
       />
     );
 
-    expect(screen.getByRole("tab", { name: "验证码 3" })).toHaveAttribute(
-      "aria-selected",
-      "true"
+    expect(screen.getByRole("button", { name: "验证码 3" })).toHaveAttribute(
+      "aria-current",
+      "page"
     );
-    expect(screen.getByRole("tab", { name: "金融 1" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "其他" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "金融 1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "其他" })).toBeInTheDocument();
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
   });
 
-  it("maps the financial tab to loan_collection", async () => {
+  it("maps the financial button to loan_collection", async () => {
     const onChange = vi.fn();
     const user = userEvent.setup();
 
@@ -46,7 +48,7 @@ describe("CategoryTabs", () => {
       />
     );
 
-    await user.click(screen.getByRole("tab", { name: "金融 1" }));
+    await user.click(screen.getByRole("button", { name: "金融 1" }));
 
     expect(onChange).toHaveBeenCalledWith("loan_collection");
   });

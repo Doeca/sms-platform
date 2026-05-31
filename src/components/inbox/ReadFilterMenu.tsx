@@ -22,6 +22,7 @@ function getReadStateLabel(readState: ClientReadState) {
 export function ReadFilterMenu({ readState, onChange }: ReadFilterMenuProps) {
   const [open, setOpen] = useState(false);
   const menuId = useId();
+  const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const activeLabel = getReadStateLabel(readState);
@@ -36,6 +37,31 @@ export function ReadFilterMenu({ readState, onChange }: ReadFilterMenuProps) {
       optionRefs.current[activeIndex]?.focus();
     }
   }, [activeIndex, open]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    function closeOnOutsideInteraction(event: PointerEvent | FocusEvent) {
+      const target = event.target;
+
+      if (
+        target instanceof Node &&
+        !containerRef.current?.contains(target)
+      ) {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", closeOnOutsideInteraction);
+    document.addEventListener("focusin", closeOnOutsideInteraction);
+
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideInteraction);
+      document.removeEventListener("focusin", closeOnOutsideInteraction);
+    };
+  }, [open]);
 
   function handleChange(nextReadState: ClientReadState) {
     onChange(nextReadState);
@@ -90,7 +116,7 @@ export function ReadFilterMenu({ readState, onChange }: ReadFilterMenuProps) {
   }
 
   return (
-    <div className="read-filter">
+    <div className="read-filter" ref={containerRef}>
       <button
         aria-controls={open ? menuId : undefined}
         aria-expanded={open}
