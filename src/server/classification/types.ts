@@ -8,7 +8,4 @@ export type ClassificationResult = {
   error?: string;
 };
 
-export type KimiCategory = Extract<
-  MessageCategory,
-  "loan_collection" | "other"
->;
+export type KimiCategory = MessageCategory;

@@ -28,6 +28,16 @@ describe("classifyMessage", () => {
     expect(result).toEqual({ category: "loan_collection", source: "kimi" });
   });
 
+  it("uses Kimi verification when keywords do not match", async () => {
+    const classifyWithKimi = vi.fn(async () => "verification" as const);
+
+    const result = await classifyMessage("登录动态数字为 246810", {
+      classifyWithKimi
+    });
+
+    expect(result).toEqual({ category: "verification", source: "kimi" });
+  });
+
   it("falls back to other when Kimi fails", async () => {
     const classifyWithKimi = vi.fn(async () => {
       throw new Error("network down");

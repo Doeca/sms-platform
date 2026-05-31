@@ -17,12 +17,16 @@ type KimiResponse = {
 };
 
 const SYSTEM_PROMPT =
-  "你是短信分类器。只判断短信是否属于贷款、还款提醒、逾期、催收相关内容。只输出 JSON。";
+  "你是短信分类器。判断短信属于验证码、金融贷款/还款/逾期/催收相关内容，还是其他内容。只输出 JSON。";
 
 function parseKimiCategory(content: string): KimiCategory {
   const parsed = JSON.parse(content) as { category?: unknown };
 
-  if (parsed.category === "loan_collection" || parsed.category === "other") {
+  if (
+    parsed.category === "verification" ||
+    parsed.category === "loan_collection" ||
+    parsed.category === "other"
+  ) {
     return parsed.category;
   }
 
@@ -61,7 +65,10 @@ export async function classifyWithKimi(
             },
             {
               role: "user",
-              content: `请分类这条短信。只能返回 {"category":"loan_collection"} 或 {"category":"other"}。\n\n短信内容：${body}`
+              content:
+                "请分类这条短信。只能返回 " +
+                '{"category":"verification"}、{"category":"loan_collection"} 或 {"category":"other"}。' +
+                `\n\n短信内容：${body}`
             }
           ],
           response_format: { type: "json_object" },

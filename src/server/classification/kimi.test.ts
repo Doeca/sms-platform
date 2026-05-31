@@ -2,13 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 import { classifyWithKimi } from "./kimi";
 
 describe("classifyWithKimi", () => {
-  it("maps a valid Kimi JSON response", async () => {
+  it.each([
+    ["verification", "您的登录动态码为 123456"],
+    ["loan_collection", "请尽快处理逾期还款"],
+    ["other", "您的快递已到达驿站"]
+  ] as const)("maps a valid %s Kimi JSON response", async (category, body) => {
     const fetchImpl = vi.fn(async () =>
       Response.json({
         choices: [
           {
             message: {
-              content: "{\"category\":\"loan_collection\"}"
+              content: JSON.stringify({ category })
             }
           }
         ]
@@ -16,14 +20,14 @@ describe("classifyWithKimi", () => {
     );
 
     await expect(
-      classifyWithKimi("请尽快还款", {
+      classifyWithKimi(body, {
         apiKey: " key ",
         baseUrl: "https://api.moonshot.cn/v1",
         model: "kimi-k2.6",
         timeoutMs: 8000,
         fetchImpl
       })
-    ).resolves.toBe("loan_collection");
+    ).resolves.toBe(category);
 
     expect(fetchImpl).toHaveBeenCalledWith(
       "https://api.moonshot.cn/v1/chat/completions",
@@ -42,7 +46,7 @@ describe("classifyWithKimi", () => {
     const requestInit = fetchCalls[0]?.[1];
     const requestBody = JSON.parse(String(requestInit?.body)) as {
       model?: unknown;
-      messages?: unknown[];
+      messages?: Array<{ role?: string; content?: string }>;
       response_format?: unknown;
       max_completion_tokens?: unknown;
       stream?: unknown;
@@ -57,6 +61,13 @@ describe("classifyWithKimi", () => {
       })
     );
     expect(requestBody.messages).toHaveLength(2);
+    expect(requestBody.messages?.[1]?.content).toContain(
+      '{"category":"verification"}'
+    );
+    expect(requestBody.messages?.[1]?.content).toContain(
+      '{"category":"loan_collection"}'
+    );
+    expect(requestBody.messages?.[1]?.content).toContain('{"category":"other"}');
   });
 
   it("throws for invalid response categories", async () => {
@@ -65,7 +76,7 @@ describe("classifyWithKimi", () => {
         choices: [
           {
             message: {
-              content: "{\"category\":\"verification\"}"
+              content: "{\"category\":\"spam\"}"
             }
           }
         ]
