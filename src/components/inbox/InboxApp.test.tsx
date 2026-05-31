@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { InboxApp } from "./InboxApp";
@@ -86,6 +86,65 @@ const secondVerificationPayload = {
     }
   }
 };
+
+const twoUnreadMessagesPayload = {
+  ...inboxPayload,
+  messages: [
+    inboxPayload.messages[0],
+    {
+      ...inboxPayload.messages[0],
+      id: "msg-2",
+      sender: "10086",
+      body: "第二条未读验证码",
+      receivedAt: "2026-05-30T08:31:00.000Z"
+    }
+  ],
+  stats: {
+    ...inboxPayload.stats,
+    all: 2,
+    unread: 2,
+    verification: 2,
+    unreadByCategory: {
+      verification: 2,
+      loan_collection: 0,
+      other: 0
+    }
+  }
+};
+
+const financialPayload = {
+  ...inboxPayload,
+  messages: [
+    {
+      ...inboxPayload.messages[0],
+      id: "msg-financial",
+      sender: "1069",
+      body: "还款提醒",
+      category: "loan_collection" as const
+    }
+  ],
+  stats: {
+    ...inboxPayload.stats,
+    all: 1,
+    unread: 1,
+    verification: 0,
+    loan_collection: 1,
+    unreadByCategory: {
+      verification: 0,
+      loan_collection: 1,
+      other: 0
+    }
+  }
+};
+
+function createDeferredResponse() {
+  let resolve: (response: Response) => void = () => undefined;
+  const promise = new Promise<Response>((nextResolve) => {
+    resolve = nextResolve;
+  });
+
+  return { promise, resolve };
+}
 
 describe("InboxApp", () => {
   afterEach(() => {
@@ -312,31 +371,6 @@ describe("InboxApp", () => {
   });
 
   it("selects multiple messages and marks unread selections as read", async () => {
-    const twoMessagePayload = {
-      ...inboxPayload,
-      messages: [
-        inboxPayload.messages[0],
-        {
-          ...inboxPayload.messages[0],
-          id: "msg-2",
-          sender: "10086",
-          body: "第二条未读验证码",
-          receivedAt: "2026-05-30T08:31:00.000Z"
-        }
-      ],
-      stats: {
-        ...inboxPayload.stats,
-        all: 2,
-        unread: 2,
-        verification: 2,
-        unreadByCategory: {
-          verification: 2,
-          loan_collection: 0,
-          other: 0
-        }
-      }
-    };
-
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url === "/api/auth/access") {
         return Response.json({ ok: true });
@@ -346,10 +380,10 @@ describe("InboxApp", () => {
         (url === "/api/messages/msg-1" || url === "/api/messages/msg-2") &&
         init?.method === "PATCH"
       ) {
-        return Response.json({ message: twoMessagePayload.messages[0] });
+        return Response.json({ message: twoUnreadMessagesPayload.messages[0] });
       }
 
-      return Response.json(twoMessagePayload);
+      return Response.json(twoUnreadMessagesPayload);
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -386,6 +420,189 @@ describe("InboxApp", () => {
     });
 
     expect(screen.queryByText("已选择 2 条")).not.toBeInTheDocument();
+  });
+
+  it("reports partial batch failures and exits select mode", async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/api/auth/access") {
+        return Response.json({ ok: true });
+      }
+
+      if (url === "/api/messages/msg-1" && init?.method === "PATCH") {
+        return Response.json({ message: twoUnreadMessagesPayload.messages[0] });
+      }
+
+      if (url === "/api/messages/msg-2" && init?.method === "PATCH") {
+        throw new Error("database down");
+      }
+
+      return Response.json(twoUnreadMessagesPayload);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const user = userEvent.setup();
+
+    render(<InboxApp />);
+
+    await user.type(screen.getByLabelText("访问密钥"), "secret");
+    await user.click(screen.getByRole("button", { name: "进入" }));
+    await waitFor(() => {
+      expect(screen.getByText("第二条未读验证码")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "选择" }));
+    await user.click(screen.getByRole("button", { name: "短信 955xx" }));
+    await user.click(screen.getByRole("button", { name: "短信 10086" }));
+    await user.click(screen.getByRole("button", { name: "标记已读" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("部分短信更新失败")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("已选择 2 条")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "选择" })).toBeInTheDocument();
+  });
+
+  it("reports refresh failures after batch updates and exits select mode", async () => {
+    let patchAttempted = false;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/api/auth/access") {
+        return Response.json({ ok: true });
+      }
+
+      if (
+        (url === "/api/messages/msg-1" || url === "/api/messages/msg-2") &&
+        init?.method === "PATCH"
+      ) {
+        patchAttempted = true;
+        return Response.json({ message: twoUnreadMessagesPayload.messages[0] });
+      }
+
+      if (url === "/api/messages?category=verification" && patchAttempted) {
+        throw new Error("refresh down");
+      }
+
+      return Response.json(twoUnreadMessagesPayload);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const user = userEvent.setup();
+
+    render(<InboxApp />);
+
+    await user.type(screen.getByLabelText("访问密钥"), "secret");
+    await user.click(screen.getByRole("button", { name: "进入" }));
+    await waitFor(() => {
+      expect(screen.getByText("第二条未读验证码")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "选择" }));
+    await user.click(screen.getByRole("button", { name: "短信 955xx" }));
+    await user.click(screen.getByRole("button", { name: "短信 10086" }));
+    await user.click(screen.getByRole("button", { name: "标记已读" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("短信刷新失败")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("已选择 2 条")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "选择" })).toBeInTheDocument();
+  });
+
+  it("clears selected rows when category or read filters change", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/auth/access") {
+        return Response.json({ ok: true });
+      }
+
+      return Response.json(twoUnreadMessagesPayload);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const user = userEvent.setup();
+
+    render(<InboxApp />);
+
+    await user.type(screen.getByLabelText("访问密钥"), "secret");
+    await user.click(screen.getByRole("button", { name: "进入" }));
+    await waitFor(() => {
+      expect(screen.getByText("第二条未读验证码")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "选择" }));
+    await user.click(screen.getByRole("button", { name: "短信 955xx" }));
+    expect(screen.getByText("已选择 1 条")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "金融" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/messages?category=loan_collection"
+      );
+    });
+    expect(screen.queryByText("已选择 1 条")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "选择" }));
+    await user.click(screen.getByRole("button", { name: "短信 955xx" }));
+    expect(screen.getByText("已选择 1 条")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "筛选" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "未读" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/messages?readState=unread&category=loan_collection"
+      );
+    });
+    expect(screen.queryByText("已选择 1 条")).not.toBeInTheDocument();
+  });
+
+  it("ignores stale visible responses from previous filters", async () => {
+    const delayedVerification = createDeferredResponse();
+    let delayedVerificationUsed = false;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/auth/access") {
+        return Response.json({ ok: true });
+      }
+
+      if (url === "/api/messages?category=verification") {
+        if (!delayedVerificationUsed) {
+          delayedVerificationUsed = true;
+          return delayedVerification.promise;
+        }
+
+        return Response.json(inboxPayload);
+      }
+
+      if (url === "/api/messages?category=loan_collection") {
+        return Response.json(financialPayload);
+      }
+
+      return Response.json(inboxPayload);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const user = userEvent.setup();
+
+    render(<InboxApp initialAuthenticated />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/messages?category=verification"
+      );
+    });
+
+    await user.click(screen.getByRole("tab", { name: "金融" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("还款提醒")).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      delayedVerification.resolve(Response.json(inboxPayload));
+      await delayedVerification.promise;
+    });
+
+    expect(screen.getByText("还款提醒")).toBeInTheDocument();
+    expect(screen.queryByText("您的验证码是 123456")).not.toBeInTheDocument();
   });
 
   it("does not notify for messages already loaded before enabling notifications", async () => {
@@ -426,14 +643,14 @@ describe("InboxApp", () => {
   });
 
   it("does not notify for the first loaded messages when notifications are enabled early", async () => {
-    let resolveMessages: (response: Response) => void = () => undefined;
+    const resolveMessages: Array<(response: Response) => void> = [];
     const fetchMock = vi.fn(async (url: string) => {
       if (url === "/api/auth/access") {
         return Response.json({ ok: true });
       }
 
       return new Promise<Response>((resolve) => {
-        resolveMessages = resolve;
+        resolveMessages.push(resolve);
       });
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -450,7 +667,7 @@ describe("InboxApp", () => {
     await user.type(screen.getByLabelText("访问密钥"), "secret");
     await user.click(screen.getByRole("button", { name: "进入" }));
     await user.click(screen.getByRole("button", { name: "开启验证码通知" }));
-    resolveMessages(Response.json(inboxPayload));
+    resolveMessages.forEach((resolve) => resolve(Response.json(inboxPayload)));
 
     await waitFor(() => {
       expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   enterAccessKey,
   fetchMessages,
@@ -59,6 +59,7 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
     () => new Set()
   );
   const [pendingBulkRead, setPendingBulkRead] = useState(false);
+  const visibleRequestSequence = useRef(0);
 
   useVerificationNotifications(
     notificationMessages,
@@ -67,12 +68,26 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   );
 
   const loadMessages = useCallback(async () => {
-    const nextInbox = await fetchMessages({
-      readState,
-      category: activeCategory
-    });
-    setInbox(nextInbox);
-    setInboxError(null);
+    const requestSequence = visibleRequestSequence.current + 1;
+    visibleRequestSequence.current = requestSequence;
+
+    try {
+      const nextInbox = await fetchMessages({
+        readState,
+        category: activeCategory
+      });
+
+      if (requestSequence !== visibleRequestSequence.current) {
+        return;
+      }
+
+      setInbox(nextInbox);
+      setInboxError(null);
+    } catch (error) {
+      if (requestSequence === visibleRequestSequence.current) {
+        throw error;
+      }
+    }
   }, [activeCategory, readState]);
 
   const loadNotificationMessages = useCallback(async () => {
@@ -82,10 +97,12 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   }, []);
 
   const refreshMessages = useCallback(async () => {
-    try {
-      await loadMessages();
-      await loadNotificationMessages();
-    } catch {
+    const results = await Promise.allSettled([
+      loadMessages(),
+      loadNotificationMessages()
+    ]);
+
+    if (results.some((result) => result.status === "rejected")) {
       setInboxError("短信刷新失败");
     }
   }, [loadMessages, loadNotificationMessages]);
@@ -155,14 +172,28 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
     setInboxError(null);
 
     try {
-      const results = await Promise.allSettled(
+      const patchResults = await Promise.allSettled(
         selectedUnreadIds.map((id) => updateMessage(id, { isRead: true }))
       );
-      await loadMessages();
+      const refreshResults = await Promise.allSettled([
+        loadMessages(),
+        loadNotificationMessages()
+      ]);
       clearSelection();
 
-      if (results.some((result) => result.status === "rejected")) {
+      const patchFailed = patchResults.some(
+        (result) => result.status === "rejected"
+      );
+      const refreshFailed = refreshResults.some(
+        (result) => result.status === "rejected"
+      );
+
+      if (patchFailed && refreshFailed) {
+        setInboxError("部分短信更新失败，短信刷新失败");
+      } else if (patchFailed) {
         setInboxError("部分短信更新失败");
+      } else if (refreshFailed) {
+        setInboxError("短信刷新失败");
       }
     } finally {
       setPendingBulkRead(false);
