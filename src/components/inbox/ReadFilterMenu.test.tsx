@@ -33,6 +33,7 @@ describe("ReadFilterMenu", () => {
 
     expect(onChange).toHaveBeenCalledWith("unread");
     expect(screen.queryByRole("menu", { name: "已读状态筛选" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 
   it("does not render source or category filters", async () => {
@@ -112,16 +113,19 @@ describe("ReadFilterMenu", () => {
 
     render(<ReadFilterMenu readState="all" onChange={onChange} />);
 
-    await user.click(screen.getByRole("button", { name: "筛选" }));
+    const trigger = screen.getByRole("button", { name: "筛选" });
+    await user.click(trigger);
     await user.keyboard("{ArrowDown}{Enter}");
 
     expect(onChange).toHaveBeenCalledWith("unread");
     expect(screen.queryByRole("menu", { name: "已读状态筛选" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
 
-    await user.click(screen.getByRole("button", { name: "筛选" }));
+    await user.click(trigger);
     await user.keyboard("{ArrowDown}{ArrowDown} ");
 
     expect(onChange).toHaveBeenCalledWith("read");
     expect(screen.queryByRole("menu", { name: "已读状态筛选" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 });

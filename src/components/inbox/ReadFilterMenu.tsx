@@ -40,6 +40,7 @@ export function ReadFilterMenu({ readState, onChange }: ReadFilterMenuProps) {
   function handleChange(nextReadState: ClientReadState) {
     onChange(nextReadState);
     setOpen(false);
+    triggerRef.current?.focus();
   }
 
   function focusOption(index: number) {
