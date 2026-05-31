@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { InboxApp } from "./InboxApp";
@@ -144,6 +144,19 @@ function createDeferredResponse() {
   });
 
   return { promise, resolve };
+}
+
+function createDeferredJsonResponse() {
+  let resolve: (payload: unknown) => void = () => undefined;
+  const jsonPromise = new Promise<unknown>((nextResolve) => {
+    resolve = nextResolve;
+  });
+  const response = {
+    ok: true,
+    json: () => jsonPromise
+  } as Response;
+
+  return { response, resolve };
 }
 
 describe("InboxApp", () => {
@@ -556,7 +569,8 @@ describe("InboxApp", () => {
   });
 
   it("ignores stale visible responses from previous filters", async () => {
-    const delayedVerification = createDeferredResponse();
+    const delayedVerification = createDeferredJsonResponse();
+    const delayedFinancial = createDeferredResponse();
     let delayedVerificationUsed = false;
     const fetchMock = vi.fn(async (url: string) => {
       if (url === "/api/auth/access") {
@@ -566,14 +580,14 @@ describe("InboxApp", () => {
       if (url === "/api/messages?category=verification") {
         if (!delayedVerificationUsed) {
           delayedVerificationUsed = true;
-          return delayedVerification.promise;
+          return delayedVerification.response;
         }
 
         return Response.json(inboxPayload);
       }
 
       if (url === "/api/messages?category=loan_collection") {
-        return Response.json(financialPayload);
+        return delayedFinancial.promise;
       }
 
       return Response.json(inboxPayload);
@@ -590,19 +604,25 @@ describe("InboxApp", () => {
       );
     });
 
+    const resolveOldVerificationDuringClick = () => {
+      delayedVerification.resolve(inboxPayload);
+      document.removeEventListener("click", resolveOldVerificationDuringClick);
+    };
+    document.addEventListener("click", resolveOldVerificationDuringClick);
+
     await user.click(screen.getByRole("tab", { name: "金融" }));
+
+    expect(screen.getByRole("tab", { name: "金融" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    expect(screen.queryByText("您的验证码是 123456")).not.toBeInTheDocument();
+
+    delayedFinancial.resolve(Response.json(financialPayload));
 
     await waitFor(() => {
       expect(screen.getByText("还款提醒")).toBeInTheDocument();
     });
-
-    await act(async () => {
-      delayedVerification.resolve(Response.json(inboxPayload));
-      await delayedVerification.promise;
-    });
-
-    expect(screen.getByText("还款提醒")).toBeInTheDocument();
-    expect(screen.queryByText("您的验证码是 123456")).not.toBeInTheDocument();
   });
 
   it("does not notify for messages already loaded before enabling notifications", async () => {

@@ -61,6 +61,11 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   const [pendingBulkRead, setPendingBulkRead] = useState(false);
   const visibleRequestSequence = useRef(0);
 
+  function invalidateVisibleRequests() {
+    visibleRequestSequence.current += 1;
+    return visibleRequestSequence.current;
+  }
+
   useVerificationNotifications(
     notificationMessages,
     notificationsEnabled,
@@ -68,8 +73,7 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   );
 
   const loadMessages = useCallback(async () => {
-    const requestSequence = visibleRequestSequence.current + 1;
-    visibleRequestSequence.current = requestSequence;
+    const requestSequence = invalidateVisibleRequests();
 
     try {
       const nextInbox = await fetchMessages({
@@ -127,11 +131,19 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   }
 
   function handleCategoryChange(category: ClientCategory) {
+    if (category !== activeCategory) {
+      invalidateVisibleRequests();
+    }
+
     setActiveCategory(category);
     clearSelection();
   }
 
   function handleReadStateChange(nextReadState: ClientReadState) {
+    if (nextReadState !== readState) {
+      invalidateVisibleRequests();
+    }
+
     setReadState(nextReadState);
     clearSelection();
   }
