@@ -31,6 +31,7 @@ export type InboxResponse = {
     verification: number;
     loan_collection: number;
     other: number;
+    unreadByCategory: Record<ClientCategory, number>;
   };
 };
 

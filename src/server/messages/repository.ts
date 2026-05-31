@@ -179,23 +179,40 @@ export async function listMessages(query: ListMessagesQuery) {
     };
   }
 
-  const [messages, sources, all, unread, verification, loanCollection, other] =
-    await Promise.all([
-      prisma.message.findMany({
-        where,
-        include: messageInclude(),
-        orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
-        take: query.limit
-      }),
-      prisma.messageSource.findMany({
-        orderBy: [{ deviceName: "asc" }, { receivedPhoneNumber: "asc" }]
-      }),
-      prisma.message.count(),
-      prisma.message.count({ where: { isRead: false } }),
-      prisma.message.count({ where: { category: "verification" } }),
-      prisma.message.count({ where: { category: "loan_collection" } }),
-      prisma.message.count({ where: { category: "other" } })
-    ]);
+  const [
+    messages,
+    sources,
+    all,
+    unread,
+    verification,
+    loanCollection,
+    other,
+    unreadVerification,
+    unreadLoanCollection,
+    unreadOther
+  ] = await Promise.all([
+    prisma.message.findMany({
+      where,
+      include: messageInclude(),
+      orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
+      take: query.limit
+    }),
+    prisma.messageSource.findMany({
+      orderBy: [{ deviceName: "asc" }, { receivedPhoneNumber: "asc" }]
+    }),
+    prisma.message.count(),
+    prisma.message.count({ where: { isRead: false } }),
+    prisma.message.count({ where: { category: "verification" } }),
+    prisma.message.count({ where: { category: "loan_collection" } }),
+    prisma.message.count({ where: { category: "other" } }),
+    prisma.message.count({
+      where: { category: "verification", isRead: false }
+    }),
+    prisma.message.count({
+      where: { category: "loan_collection", isRead: false }
+    }),
+    prisma.message.count({ where: { category: "other", isRead: false } })
+  ]);
 
   return {
     messages,
@@ -205,7 +222,12 @@ export async function listMessages(query: ListMessagesQuery) {
       unread,
       verification,
       loan_collection: loanCollection,
-      other
+      other,
+      unreadByCategory: {
+        verification: unreadVerification,
+        loan_collection: unreadLoanCollection,
+        other: unreadOther
+      }
     }
   };
 }

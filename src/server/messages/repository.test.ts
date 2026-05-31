@@ -212,6 +212,51 @@ describe("message repository", () => {
     expect(readVerification.stats.unread).toBe(1);
   });
 
+  it("returns unread counts grouped by category", async () => {
+    const verification = await saveIncomingMessage(
+      {
+        receivedPhoneNumber: "+8613800000000",
+        sender: "955xx",
+        body: "您的验证码是 123456",
+        receivedAt: new Date("2026-05-30T08:30:00.000Z")
+      },
+      { category: "verification", source: "keyword" }
+    );
+
+    await saveIncomingMessage(
+      {
+        receivedPhoneNumber: "+8613900000000",
+        sender: "loan",
+        body: "请尽快还款",
+        receivedAt: new Date("2026-05-30T08:31:00.000Z")
+      },
+      { category: "loan_collection", source: "kimi" }
+    );
+
+    await saveIncomingMessage(
+      {
+        receivedPhoneNumber: "+8613700000000",
+        sender: "10086",
+        body: "普通通知",
+        receivedAt: new Date("2026-05-30T08:32:00.000Z")
+      },
+      { category: "other", source: "kimi" }
+    );
+
+    await updateMessage(verification.message.id, { isRead: true });
+
+    const result = await listMessages({
+      readState: "all",
+      limit: 100
+    });
+
+    expect(result.stats.unreadByCategory).toEqual({
+      verification: 0,
+      loan_collection: 1,
+      other: 1
+    });
+  });
+
   it("marks manual category edits with manual classification source", async () => {
     const saved = await saveIncomingMessage(
       {

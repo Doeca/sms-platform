@@ -51,6 +51,11 @@ describe("GET /api/messages", () => {
     expect(json.sources).toHaveLength(1);
     expect(json.sources[0].label).toBe("+8613800000000");
     expect(json.stats.verification).toBe(1);
+    expect(json.stats.unreadByCategory).toEqual({
+      verification: 1,
+      loan_collection: 0,
+      other: 0
+    });
   });
 
   it("applies category filters", async () => {
