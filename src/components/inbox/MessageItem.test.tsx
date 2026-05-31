@@ -24,56 +24,87 @@ const message: ClientMessage = {
 };
 
 describe("MessageItem", () => {
-  it("renders message content and source", () => {
+  it("renders message content, source, and unread dot", () => {
     render(
       <MessageItem
         message={message}
-        onReadToggle={async () => undefined}
         onCategoryChange={async () => undefined}
+        onSelectionToggle={() => undefined}
       />
     );
 
     expect(screen.getByText("955xx")).toBeInTheDocument();
     expect(screen.getByText("Redmi 1 · SIM 1")).toBeInTheDocument();
     expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
+    expect(screen.getByLabelText("未读")).toBeInTheDocument();
   });
 
-  it("toggles read state and category", async () => {
-    const onReadToggle = vi.fn(async () => undefined);
+  it("does not render an unread dot for read messages", () => {
+    render(
+      <MessageItem
+        message={{ ...message, isRead: true }}
+        onCategoryChange={async () => undefined}
+        onSelectionToggle={() => undefined}
+      />
+    );
+
+    expect(screen.queryByLabelText("未读")).not.toBeInTheDocument();
+  });
+
+  it("changes category through the compact category control", async () => {
     const onCategoryChange = vi.fn(async () => undefined);
     const user = userEvent.setup();
 
     render(
       <MessageItem
         message={message}
-        onReadToggle={onReadToggle}
         onCategoryChange={onCategoryChange}
+        onSelectionToggle={() => undefined}
       />
     );
 
-    await user.click(screen.getByRole("button", { name: "标记已读" }));
     await user.selectOptions(screen.getByLabelText("修改分类"), "other");
 
-    expect(onReadToggle).toHaveBeenCalledWith("msg-1", true);
     expect(onCategoryChange).toHaveBeenCalledWith("msg-1", "other");
   });
 
-  it("prevents overlapping actions", async () => {
-    const onReadToggle = vi.fn(
-      () => new Promise<void>((resolve) => setTimeout(resolve, 25))
-    );
+  it("uses selection controls instead of the unread dot in select mode", async () => {
+    const onSelectionToggle = vi.fn();
     const user = userEvent.setup();
 
     render(
       <MessageItem
         message={message}
-        onReadToggle={onReadToggle}
+        selected={false}
+        selectMode
         onCategoryChange={async () => undefined}
+        onSelectionToggle={onSelectionToggle}
       />
     );
 
-    await user.dblClick(screen.getByRole("button", { name: "标记已读" }));
+    expect(screen.queryByLabelText("未读")).not.toBeInTheDocument();
 
-    expect(onReadToggle).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "选择 955xx" }));
+
+    expect(onSelectionToggle).toHaveBeenCalledWith("msg-1");
+  });
+
+  it("toggles selection when the row is clicked in select mode", async () => {
+    const onSelectionToggle = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <MessageItem
+        message={message}
+        selected
+        selectMode
+        onCategoryChange={async () => undefined}
+        onSelectionToggle={onSelectionToggle}
+      />
+    );
+
+    await user.click(screen.getByLabelText("短信 955xx"));
+
+    expect(onSelectionToggle).toHaveBeenCalledWith("msg-1");
   });
 });

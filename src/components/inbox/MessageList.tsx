@@ -4,18 +4,24 @@ import type { ClientCategory, ClientMessage } from "@/client/api";
 import { MessageItem } from "./MessageItem";
 
 type MessageListProps = {
+  emptyMessage: string;
   messages: ClientMessage[];
-  onReadToggle: (id: string, isRead: boolean) => Promise<void>;
+  selectedIds: Set<string>;
+  selectMode: boolean;
   onCategoryChange: (id: string, category: ClientCategory) => Promise<void>;
+  onSelectionToggle: (id: string) => void;
 };
 
 export function MessageList({
+  emptyMessage,
   messages,
-  onReadToggle,
-  onCategoryChange
+  selectedIds,
+  selectMode,
+  onCategoryChange,
+  onSelectionToggle
 }: MessageListProps) {
   if (messages.length === 0) {
-    return <p className="empty-state">没有匹配的短信</p>;
+    return <p className="empty-state">{emptyMessage}</p>;
   }
 
   return (
@@ -24,8 +30,10 @@ export function MessageList({
         <MessageItem
           key={message.id}
           message={message}
-          onReadToggle={onReadToggle}
+          selected={selectedIds.has(message.id)}
+          selectMode={selectMode}
           onCategoryChange={onCategoryChange}
+          onSelectionToggle={onSelectionToggle}
         />
       ))}
     </section>
