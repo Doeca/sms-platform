@@ -69,5 +69,5 @@ The web UI supports manual category changes after ingestion.
 Run the app behind HTTPS on the VPS. Keep `.env` private. Back up the SQLite
 database file before system upgrades or deployments.
 
-For a production setup with Nginx reverse proxy and systemd, see
+For a production setup with Supervisor and Nginx reverse proxy, see
 [docs/deployment-nginx.md](docs/deployment-nginx.md).

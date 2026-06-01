@@ -1,75 +1,95 @@
-# 服务器端部署指南：Nginx 反向代理
+# 服务器端部署指南：Supervisor 后台运行
 
-本文以 Ubuntu 22.04/24.04 服务器为例，把 SMS Platform 部署为一个只监听本机
-`127.0.0.1:3000` 的 Next.js 服务，并通过 Nginx 对外提供 HTTPS 访问。
+本文按当前服务器约定编写：
 
-## 1. 部署结构
+- 项目路径：`/root/projects/sms-platform`
+- 本地监听：`127.0.0.1:2760`
+- 后台保活：Supervisor
+- Nginx：由你自行配置反向代理
+- 运行用户：不创建专属用户，直接使用服务器当前 root 环境部署
 
-推荐目录：
+Nginx 只需要把公网域名反代到：
 
-- 代码目录：`/var/www/sms-platform`
-- SQLite 数据库：`/var/lib/sms-platform/prod.db`
-- 环境变量文件：`/etc/sms-platform/sms-platform.env`
-- systemd 服务：`sms-platform.service`
-- Nginx 域名：`sms.example.com`
-
-服务对外只有 Nginx 暴露 80/443 端口，Next.js 应用只绑定
-`127.0.0.1:3000`，手机端通过 HTTPS 调用
-`https://sms.example.com/api/messages/ingest` 推送短信。
-
-## 2. 准备服务器
-
-```bash
-sudo apt update
-sudo apt install -y git nginx sqlite3 curl ca-certificates
+```text
+http://127.0.0.1:2760
 ```
 
-安装 Node.js，并确保版本满足 Next.js 要求：
+手机端最终通过你的 HTTPS 域名调用：
+
+```text
+POST https://你的域名/api/messages/ingest
+```
+
+## 1. 准备服务器
+
+以下命令以 root 身份执行。先安装基础依赖：
+
+```bash
+apt update
+apt install -y git nginx sqlite3 curl ca-certificates supervisor
+```
+
+安装 Node.js，并确认版本：
 
 ```bash
 node -v
+npm -v
 ```
 
 本项目当前依赖的 Next.js 要求 `node >=20.9.0`。建议使用 Node.js 22 LTS
-或更高的长期维护版本。无论使用系统包、NodeSource、nvm、fnm 还是服务器面板，
-最终都要保证 `node` 和 `npm` 能在 systemd 服务里直接找到。
+或更高版本。
 
-创建专用运行用户和目录：
+确认 Node 可执行文件路径，后面 Supervisor 配置会用到：
 
 ```bash
-sudo useradd --system --user-group --create-home --shell /usr/sbin/nologin smsapp
-sudo install -d -m 755 -o root -g root /var/www
-sudo install -d -m 750 -o smsapp -g smsapp /var/lib/sms-platform
-sudo install -d -m 750 -o root -g smsapp /etc/sms-platform
+which node
 ```
 
-## 3. 获取代码并安装依赖
+如果输出不是 `/usr/bin/node`，后面的 Supervisor 配置里要替换成你的实际路径。
 
-把 `<你的仓库地址>` 换成实际 Git 地址：
+## 2. 获取项目代码
+
+创建项目目录：
 
 ```bash
-sudo git clone <你的仓库地址> /var/www/sms-platform
-sudo chown -R smsapp:smsapp /var/www/sms-platform
-cd /var/www/sms-platform
-sudo -u smsapp npm ci
+mkdir -p /root/projects
 ```
 
-如果服务器不能直接访问 Git，也可以先在本地打包代码，再上传到
-`/var/www/sms-platform`。上传后仍然需要执行 `npm ci`。
-
-## 4. 配置环境变量
-
-创建环境变量文件：
+首次部署时克隆代码，把 `<你的仓库地址>` 换成实际 Git 地址：
 
 ```bash
-sudo install -m 640 -o root -g smsapp /dev/null /etc/sms-platform/sms-platform.env
-sudo nano /etc/sms-platform/sms-platform.env
+git clone <你的仓库地址> /root/projects/sms-platform
+cd /root/projects/sms-platform
+npm ci
 ```
 
-写入以下内容：
+如果你是手动上传代码，也要保证最终代码目录是：
+
+```text
+/root/projects/sms-platform
+```
+
+上传后进入项目目录执行：
 
 ```bash
-DATABASE_URL="file:/var/lib/sms-platform/prod.db"
+cd /root/projects/sms-platform
+npm ci
+```
+
+## 3. 配置环境变量
+
+在项目目录创建 `.env`：
+
+```bash
+cd /root/projects/sms-platform
+cp .env.example .env
+nano .env
+```
+
+推荐生产配置：
+
+```bash
+DATABASE_URL="file:/root/projects/sms-platform/prisma/prod.db"
 SMS_INGEST_TOKEN="换成一段足够长的手机端推送密钥"
 WEB_ACCESS_KEY="换成一段足够长的网页访问密钥"
 KIMI_API_KEY="换成 Moonshot/Kimi API Key"
@@ -77,205 +97,146 @@ KIMI_BASE_URL="https://api.moonshot.cn/v1"
 KIMI_MODEL="kimi-k2.6"
 KIMI_TIMEOUT_MS="8000"
 NODE_ENV="production"
-PORT="3000"
+PORT="2760"
 ```
 
 字段说明：
 
-- `DATABASE_URL`：SQLite 数据库位置。生产环境建议使用绝对路径。
+- `DATABASE_URL`：SQLite 数据库位置。这里固定到项目的 `prisma/prod.db`。
 - `SMS_INGEST_TOKEN`：手机端推送短信时使用的 Bearer Token。
 - `WEB_ACCESS_KEY`：网页首次进入收件箱时输入的访问密钥。
 - `KIMI_API_KEY`：短信分类调用 Kimi 的密钥。
 - `KIMI_BASE_URL`：Kimi OpenAI-compatible API 地址。
 - `KIMI_MODEL`：分类模型名。
 - `KIMI_TIMEOUT_MS`：AI 分类超时时间，单位毫秒。
+- `PORT`：本地端口，固定为 `2760`。
 
-生成两个强随机密钥的例子：
+生成强随机密钥：
 
 ```bash
 openssl rand -hex 32
 openssl rand -hex 32
 ```
 
-不要把 `/etc/sms-platform/sms-platform.env` 提交到 Git，也不要发给手机端以外的人。
-手机端只需要知道公网地址和 `SMS_INGEST_TOKEN`。
+`.env` 包含敏感信息，不要提交到 Git。手机端只需要公网地址和
+`SMS_INGEST_TOKEN`。
 
-## 5. 初始化数据库并构建项目
-
-生成 Prisma Client、创建 SQLite 文件并同步数据库结构：
+## 4. 初始化数据库并构建项目
 
 ```bash
-cd /var/www/sms-platform
-sudo -u smsapp bash -lc 'set -a; . /etc/sms-platform/sms-platform.env; set +a; npm run db:generate'
-sudo -u smsapp bash -lc 'set -a; . /etc/sms-platform/sms-platform.env; set +a; npm run db:push'
-sudo -u smsapp bash -lc 'set -a; . /etc/sms-platform/sms-platform.env; set +a; npm run build'
+cd /root/projects/sms-platform
+npm run db:generate
+npm run db:push
+npm run build
 ```
 
 确认数据库文件存在：
 
 ```bash
-sudo ls -lh /var/lib/sms-platform/prod.db
+ls -lh /root/projects/sms-platform/prisma/prod.db
 ```
 
-## 6. 配置 systemd 常驻服务
-
-创建服务文件：
+可以先手动启动一次，确认本地端口可访问：
 
 ```bash
-sudo nano /etc/systemd/system/sms-platform.service
+cd /root/projects/sms-platform
+node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 2760
 ```
 
-写入：
+另开一个 SSH 窗口测试：
+
+```bash
+curl -I http://127.0.0.1:2760
+```
+
+确认有 HTTP 响应后，回到启动窗口按 `Ctrl+C` 停掉，继续配置 Supervisor。
+
+## 5. 配置 Supervisor
+
+创建 Supervisor 配置：
+
+```bash
+nano /etc/supervisor/conf.d/sms-platform.conf
+```
+
+写入以下内容。如果 `which node` 输出不是 `/usr/bin/node`，请替换 `command`
+里的 Node 路径：
 
 ```ini
-[Unit]
-Description=SMS Platform
-After=network.target
-
-[Service]
-Type=simple
-User=smsapp
-Group=smsapp
-WorkingDirectory=/var/www/sms-platform
-EnvironmentFile=/etc/sms-platform/sms-platform.env
-ExecStart=/usr/bin/node /var/www/sms-platform/node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3000
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
+[program:sms-platform]
+directory=/root/projects/sms-platform
+command=/usr/bin/node /root/projects/sms-platform/node_modules/next/dist/bin/next start -H 127.0.0.1 -p 2760
+autostart=true
+autorestart=true
+startsecs=5
+stopsignal=INT
+stopasgroup=true
+killasgroup=true
+redirect_stderr=true
+stdout_logfile=/var/log/supervisor/sms-platform.log
+stdout_logfile_maxbytes=20MB
+stdout_logfile_backups=10
+environment=NODE_ENV="production",PORT="2760"
 ```
 
-如果你的 `node` 不在 `/usr/bin/node`，先确认路径：
+加载配置并启动：
 
 ```bash
-which node
+supervisorctl reread
+supervisorctl update
+supervisorctl status sms-platform
 ```
 
-然后把 `ExecStart` 里的 `/usr/bin/node` 改成实际路径。
-
-启动服务：
+常用命令：
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now sms-platform
-sudo systemctl status sms-platform
+supervisorctl start sms-platform
+supervisorctl stop sms-platform
+supervisorctl restart sms-platform
+supervisorctl tail -f sms-platform
 ```
 
-查看实时日志：
+确认服务已监听本地端口：
 
 ```bash
-sudo journalctl -u sms-platform -f
+curl -I http://127.0.0.1:2760
 ```
 
-本机测试：
+## 6. Nginx 反向代理要点
 
-```bash
-curl -I http://127.0.0.1:3000
-```
-
-能看到 HTTP 响应后，再配置 Nginx。
-
-## 7. 配置 Nginx 反向代理
-
-创建站点配置：
-
-```bash
-sudo nano /etc/nginx/sites-available/sms-platform
-```
-
-写入，把 `sms.example.com` 换成你的域名：
+Nginx 由你自行配置，核心目标是把公网域名反代到：
 
 ```nginx
-map $http_upgrade $connection_upgrade {
-    default upgrade;
-    '' close;
-}
-
-limit_req_zone $binary_remote_addr zone=sms_ingest:10m rate=10r/s;
-
-server {
-    listen 80;
-    listen [::]:80;
-    server_name sms.example.com;
-
-    client_max_body_size 1m;
-
-    location /api/messages/ingest {
-        limit_req zone=sms_ingest burst=20 nodelay;
-
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-        proxy_read_timeout 60s;
-    }
-
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-        proxy_read_timeout 60s;
-    }
-}
+proxy_pass http://127.0.0.1:2760;
 ```
 
-启用站点并检查配置：
+建议保留这些请求头：
+
+```nginx
+proxy_set_header Host $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+```
+
+生产环境建议使用 HTTPS。浏览器通知和生产环境安全 Cookie 都需要 HTTPS。
+
+配置完成后检查：
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/sms-platform /etc/nginx/sites-enabled/sms-platform
-sudo nginx -t
-sudo systemctl reload nginx
+nginx -t
+systemctl reload nginx
+curl -I https://你的域名
 ```
 
-如果服务器开启了 UFW：
+不要对公网开放 `2760` 端口。`2760` 只应该被本机 Nginx 访问。
 
-```bash
-sudo ufw allow OpenSSH
-sudo ufw allow "Nginx Full"
-sudo ufw enable
-sudo ufw status
-```
-
-不要开放 3000 端口。3000 只应该被本机 Nginx 访问。
-
-## 8. 配置 HTTPS
-
-浏览器通知和安全 Cookie 在生产环境都需要 HTTPS。使用 Certbot：
-
-```bash
-sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d sms.example.com
-```
-
-按提示开启 HTTP 到 HTTPS 的自动跳转。完成后检查：
-
-```bash
-curl -I https://sms.example.com
-```
-
-自动续期通常由系统定时器处理，可以检查：
-
-```bash
-systemctl list-timers | grep certbot
-sudo certbot renew --dry-run
-```
-
-## 9. 手机端推送格式
+## 7. 手机端推送格式
 
 手机端推送到：
 
 ```text
-POST https://sms.example.com/api/messages/ingest
+POST https://你的域名/api/messages/ingest
 ```
 
 请求头：
@@ -316,7 +277,7 @@ Content-Type: application/json
 用 curl 测试：
 
 ```bash
-curl -X POST "https://sms.example.com/api/messages/ingest" \
+curl -X POST "https://你的域名/api/messages/ingest" \
   -H "Authorization: Bearer <SMS_INGEST_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -331,83 +292,92 @@ curl -X POST "https://sms.example.com/api/messages/ingest" \
 
 首次写入成功返回 `201`，重复推送返回 `200` 且响应里会有 `duplicate: true`。
 
-## 10. 网页访问
+## 8. 网页访问
 
 浏览器打开：
 
 ```text
-https://sms.example.com
+https://你的域名
 ```
 
 输入 `WEB_ACCESS_KEY` 后进入收件箱。网页会自动拉取最新短信；浏览器验证码通知
 需要在 HTTPS 下授权通知权限。
 
-## 11. 日常更新
+## 9. 日常更新
 
-每次更新代码前，建议先备份数据库：
+更新代码前，建议先备份数据库：
 
 ```bash
-sudo install -d -m 750 -o smsapp -g smsapp /var/backups/sms-platform
-sudo -u smsapp sqlite3 /var/lib/sms-platform/prod.db \
-  ".backup '/var/backups/sms-platform/prod-$(date +%F-%H%M%S).db'"
+mkdir -p /root/backups/sms-platform
+sqlite3 /root/projects/sms-platform/prisma/prod.db \
+  ".backup '/root/backups/sms-platform/prod-$(date +%F-%H%M%S).db'"
 ```
 
 更新代码并重启：
 
 ```bash
-cd /var/www/sms-platform
-sudo -u smsapp git pull --ff-only
-sudo -u smsapp npm ci
-sudo -u smsapp bash -lc 'set -a; . /etc/sms-platform/sms-platform.env; set +a; npm run db:generate'
-sudo -u smsapp bash -lc 'set -a; . /etc/sms-platform/sms-platform.env; set +a; npm run db:push'
-sudo -u smsapp bash -lc 'set -a; . /etc/sms-platform/sms-platform.env; set +a; npm run build'
-sudo systemctl restart sms-platform
-sudo systemctl status sms-platform
+cd /root/projects/sms-platform
+git pull --ff-only
+npm ci
+npm run db:generate
+npm run db:push
+npm run build
+supervisorctl restart sms-platform
+supervisorctl status sms-platform
 ```
 
-如果只改了环境变量：
+如果只改了 `.env`：
 
 ```bash
-sudo systemctl restart sms-platform
+supervisorctl restart sms-platform
 ```
 
-## 12. 备份与恢复
+## 10. 备份与恢复
 
 备份：
 
 ```bash
-sudo -u smsapp sqlite3 /var/lib/sms-platform/prod.db \
-  ".backup '/var/backups/sms-platform/prod-$(date +%F-%H%M%S).db'"
+mkdir -p /root/backups/sms-platform
+sqlite3 /root/projects/sms-platform/prisma/prod.db \
+  ".backup '/root/backups/sms-platform/prod-$(date +%F-%H%M%S).db'"
 ```
 
 恢复前先停服务：
 
 ```bash
-sudo systemctl stop sms-platform
-sudo cp /var/backups/sms-platform/prod-YYYY-MM-DD-HHMMSS.db /var/lib/sms-platform/prod.db
-sudo chown smsapp:smsapp /var/lib/sms-platform/prod.db
-sudo systemctl start sms-platform
+supervisorctl stop sms-platform
+cp /root/backups/sms-platform/prod-YYYY-MM-DD-HHMMSS.db \
+  /root/projects/sms-platform/prisma/prod.db
+supervisorctl start sms-platform
 ```
 
-## 13. 排错
+## 11. 排错
 
 服务起不来：
 
 ```bash
-sudo journalctl -u sms-platform -n 200 --no-pager
+supervisorctl status sms-platform
+supervisorctl tail -f sms-platform
+tail -n 200 /var/log/supervisor/sms-platform.log
+```
+
+本地端口不通：
+
+```bash
+curl -I http://127.0.0.1:2760
 ```
 
 Nginx 配置错误：
 
 ```bash
-sudo nginx -t
-sudo tail -n 100 /var/log/nginx/error.log
+nginx -t
+tail -n 100 /var/log/nginx/error.log
 ```
 
 手机端返回 `401`：
 
 - 检查请求头是否是 `Authorization: Bearer <SMS_INGEST_TOKEN>`。
-- 检查手机端保存的 token 是否和服务器环境变量完全一致。
+- 检查手机端保存的 token 是否和服务器 `.env` 里的值完全一致。
 
 手机端返回 `400`：
 
@@ -422,7 +392,7 @@ sudo tail -n 100 /var/log/nginx/error.log
 - Kimi 失败时消息会以 `classificationSource=fallback` 保存，可用 SQLite 检查最近记录：
 
 ```bash
-sudo -u smsapp sqlite3 /var/lib/sms-platform/prod.db \
+sqlite3 /root/projects/sms-platform/prisma/prod.db \
   "select sender, category, classificationSource, classificationError from Message order by createdAt desc limit 10;"
 ```
 
