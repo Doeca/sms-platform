@@ -37,7 +37,7 @@ node -v
 创建专用运行用户和目录：
 
 ```bash
-sudo useradd --system --create-home --shell /usr/sbin/nologin smsapp
+sudo useradd --system --user-group --create-home --shell /usr/sbin/nologin smsapp
 sudo install -d -m 755 -o root -g root /var/www
 sudo install -d -m 750 -o smsapp -g smsapp /var/lib/sms-platform
 sudo install -d -m 750 -o root -g smsapp /etc/sms-platform
