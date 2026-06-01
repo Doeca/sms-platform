@@ -17,9 +17,14 @@ export function MessageDetailDialog({
   onClose
 }: MessageDetailDialogProps) {
   const dialogRef = useRef<HTMLElement>(null);
+  const onCloseRef = useRef(onClose);
   const [pendingCategory, setPendingCategory] = useState(false);
   const titleId = `message-detail-title-${message.id}`;
   const bodyId = `message-detail-body-${message.id}`;
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     const previousFocus =
@@ -29,9 +34,20 @@ export function MessageDetailDialog({
 
     dialogRef.current?.focus();
 
+    return () => {
+      previousFocus?.focus();
+    };
+  }, []);
+
+  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        onClose();
+        onCloseRef.current();
+        return;
+      }
+
+      if (event.key === "Tab") {
+        trapFocus(event);
       }
     }
 
@@ -39,9 +55,65 @@ export function MessageDetailDialog({
 
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      previousFocus?.focus();
     };
-  }, [onClose]);
+  }, []);
+
+  function trapFocus(event: KeyboardEvent) {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    const focusableElements = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        [
+          "a[href]",
+          "button:not([disabled])",
+          "select:not([disabled])",
+          "textarea:not([disabled])",
+          "input:not([disabled])",
+          "[tabindex]:not([tabindex='-1'])"
+        ].join(",")
+      )
+    ).filter(
+      (element) =>
+        !element.hasAttribute("disabled") &&
+        element.getAttribute("aria-hidden") !== "true"
+    );
+
+    if (focusableElements.length === 0) {
+      event.preventDefault();
+      dialog.focus();
+      return;
+    }
+
+    const firstFocusable = focusableElements[0];
+    const lastFocusable = focusableElements[focusableElements.length - 1];
+    const activeElement = document.activeElement;
+
+    if (event.shiftKey) {
+      if (
+        activeElement === firstFocusable ||
+        activeElement === dialog ||
+        !dialog.contains(activeElement)
+      ) {
+        event.preventDefault();
+        lastFocusable.focus();
+      }
+
+      return;
+    }
+
+    if (
+      activeElement === lastFocusable ||
+      activeElement === dialog ||
+      !dialog.contains(activeElement)
+    ) {
+      event.preventDefault();
+      firstFocusable.focus();
+    }
+  }
 
   async function changeCategory(category: ClientCategory) {
     if (pendingCategory) {

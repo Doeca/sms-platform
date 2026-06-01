@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ClientMessage } from "@/client/api";
@@ -118,6 +118,37 @@ describe("MessageDetailDialog", () => {
     expect(onCategoryChange).toHaveBeenCalledWith("msg-1", "other");
   });
 
+  it("disables category changes while a category update is pending", async () => {
+    let resolveCategoryChange!: () => void;
+    const onCategoryChange = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveCategoryChange = resolve;
+        })
+    );
+    const user = userEvent.setup();
+
+    render(
+      <MessageDetailDialog
+        message={message}
+        onCategoryChange={onCategoryChange}
+        onClose={() => undefined}
+      />
+    );
+
+    const categorySelect = screen.getByLabelText("修改详情分类");
+
+    await user.selectOptions(categorySelect, "other");
+
+    expect(categorySelect).toBeDisabled();
+
+    await act(async () => {
+      resolveCategoryChange();
+    });
+
+    expect(categorySelect).not.toBeDisabled();
+  });
+
   it("moves focus into the dialog and returns focus after unmount", () => {
     const opener = document.createElement("button");
     opener.textContent = "opener";
@@ -133,6 +164,78 @@ describe("MessageDetailDialog", () => {
     );
 
     expect(screen.getByRole("dialog", { name: "短信详情 955xx" })).toHaveFocus();
+
+    unmount();
+
+    expect(opener).toHaveFocus();
+    opener.remove();
+  });
+
+  it("keeps Tab focus inside the dialog", async () => {
+    const outsideButton = document.createElement("button");
+    outsideButton.textContent = "outside";
+    document.body.append(outsideButton);
+    const user = userEvent.setup();
+
+    render(
+      <MessageDetailDialog
+        message={message}
+        onCategoryChange={async () => undefined}
+        onClose={() => undefined}
+      />
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "短信详情 955xx" });
+    const closeButton = screen.getByRole("button", { name: "关闭短信详情" });
+    const categorySelect = screen.getByLabelText("修改详情分类");
+
+    expect(dialog).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(categorySelect).toHaveFocus();
+
+    await user.tab();
+    expect(closeButton).toHaveFocus();
+
+    await user.tab();
+    expect(categorySelect).toHaveFocus();
+
+    await user.tab();
+    expect(closeButton).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(categorySelect).toHaveFocus();
+
+    outsideButton.remove();
+  });
+
+  it("does not restore focus during rerender when onClose changes", async () => {
+    const opener = document.createElement("button");
+    opener.textContent = "opener";
+    document.body.append(opener);
+    opener.focus();
+    const user = userEvent.setup();
+
+    const { rerender, unmount } = render(
+      <MessageDetailDialog
+        message={message}
+        onCategoryChange={async () => undefined}
+        onClose={() => undefined}
+      />
+    );
+
+    await user.tab();
+    expect(screen.getByRole("button", { name: "关闭短信详情" })).toHaveFocus();
+
+    rerender(
+      <MessageDetailDialog
+        message={message}
+        onCategoryChange={async () => undefined}
+        onClose={() => undefined}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "关闭短信详情" })).toHaveFocus();
 
     unmount();
 
