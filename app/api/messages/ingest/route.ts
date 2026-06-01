@@ -62,9 +62,14 @@ export async function handleIngestRequest(
     );
   }
 
+  const incomingMessage = {
+    ...parsed.data,
+    receivedAt: new Date()
+  };
+
   try {
     const classification = await dependencies.classify(parsed.data.body);
-    const saved = await dependencies.save(parsed.data, classification);
+    const saved = await dependencies.save(incomingMessage, classification);
 
     return NextResponse.json(serializeSavedMessage(saved), {
       status: saved.duplicate ? 200 : 201

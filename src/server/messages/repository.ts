@@ -8,6 +8,10 @@ import type {
   UpdateMessageInput
 } from "./schemas";
 
+type PersistIncomingMessageInput = IncomingMessageInput & {
+  receivedAt: Date;
+};
+
 async function findOrCreateSource(input: IncomingMessageInput) {
   const identityKey = buildSourceIdentityKey(input);
   const existingIdentity = await prisma.messageSourceIdentity.findUnique({
@@ -97,7 +101,7 @@ function isUniqueConstraintError(error: unknown, field: string) {
 }
 
 export async function saveIncomingMessage(
-  input: IncomingMessageInput,
+  input: PersistIncomingMessageInput,
   classification: ClassificationResult
 ) {
   const dedupeKey = buildDedupeKey(input);

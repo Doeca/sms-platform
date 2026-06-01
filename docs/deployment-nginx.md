@@ -254,8 +254,7 @@ Content-Type: application/json
   "deviceName": "Redmi 1",
   "simSlot": 1,
   "sender": "955xx",
-  "body": "您的验证码是 123456，请勿泄露",
-  "receivedAt": "2026-05-30T08:30:00.000Z"
+  "body": "您的验证码是 123456，请勿泄露"
 }
 ```
 
@@ -264,18 +263,14 @@ Content-Type: application/json
 - `receivedPhoneNumber`：收到短信的手机号。
 - `sender`：短信发送方。
 - `body`：短信正文。
-- `receivedAt`：手机端收到短信的时间。推荐使用 ISO 8601 UTC 时间，例如
-  `2026-05-30T08:30:00.000Z`；也支持 `2026-01-28 14:30:00` 这种手机端本地时间格式。
 
 可选字段：
 
 - `deviceName`：手机名称，用于网页展示来源。
 - `simSlot`：SIM 卡槽编号。
 
-服务器会自动分类，手机端不需要提交分类。重复推送同一条短信时，请保持
-`receivedPhoneNumber + sender + body + receivedAt` 不变，这样服务器会识别为重复数据。
-如果发送的是 `YYYY-MM-DD HH:mm:ss` 这种没有时区的格式，后端会按服务器本地时区解析；
-如果手机时间是中国时间，建议服务器时区也设置为 `Asia/Shanghai`。
+服务器会自动分类，手机端不需要提交分类。服务器会使用接口收到请求时的时间作为
+`receivedAt`。旧手机端如果继续发送 `receivedAt`，后端也会忽略这个值。
 
 用 curl 测试：
 
@@ -288,12 +283,11 @@ curl -X POST "https://你的域名/api/messages/ingest" \
     "deviceName": "Redmi 1",
     "simSlot": 1,
     "sender": "955xx",
-    "body": "您的验证码是 123456，请勿泄露",
-    "receivedAt": "2026-05-30T08:30:00.000Z"
+    "body": "您的验证码是 123456，请勿泄露"
   }'
 ```
 
-首次写入成功返回 `201`，重复推送返回 `200` 且响应里会有 `duplicate: true`。
+写入成功返回 `201`，响应里的 `message.receivedAt` 是服务器生成的接收时间。
 
 ## 8. 网页访问
 
@@ -385,8 +379,7 @@ tail -n 100 /var/log/nginx/error.log
 手机端返回 `400`：
 
 - 检查 JSON 是否合法。
-- 检查是否缺少 `receivedPhoneNumber`、`sender`、`body`、`receivedAt`。
-- 检查 `receivedAt` 是否是可解析的时间字符串。
+- 检查是否缺少 `receivedPhoneNumber`、`sender`、`body`。
 
 短信保存了但分类都是 `other`：
 

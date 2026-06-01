@@ -6,21 +6,20 @@ import {
 } from "./schemas";
 
 describe("incomingMessageSchema", () => {
-  it("accepts the Android forwarding payload", () => {
+  it("accepts the Android forwarding payload without a received timestamp", () => {
     const parsed = incomingMessageSchema.parse({
       receivedPhoneNumber: "+8613800000000",
       deviceName: "Redmi 1",
       simSlot: 1,
       sender: "955xx",
-      body: "您的验证码是 123456，请勿泄露",
-      receivedAt: "2026-05-30T08:30:00.000Z"
+      body: "您的验证码是 123456，请勿泄露"
     });
 
-    expect(parsed.receivedAt).toEqual(new Date("2026-05-30T08:30:00.000Z"));
+    expect("receivedAt" in parsed).toBe(false);
     expect(parsed.simSlot).toBe(1);
   });
 
-  it("accepts Android local datetime strings without timezone", () => {
+  it("ignores legacy received timestamps from Android forwarding payloads", () => {
     const parsed = incomingMessageSchema.parse({
       receivedPhoneNumber: "+8613800000000",
       sender: "955xx",
@@ -28,29 +27,16 @@ describe("incomingMessageSchema", () => {
       receivedAt: "2026-01-28 14:30:00"
     });
 
-    expect(parsed.receivedAt).toEqual(new Date(2026, 0, 28, 14, 30, 0));
+    expect("receivedAt" in parsed).toBe(false);
   });
 
   it("rejects missing required fields", () => {
     const result = incomingMessageSchema.safeParse({
       receivedPhoneNumber: "+8613800000000",
-      body: "missing sender and receivedAt"
+      body: "missing sender"
     });
 
     expect(result.success).toBe(false);
-  });
-
-  it("rejects non-string and invalid received timestamps", () => {
-    for (const receivedAt of [null, 0, "not-a-date"]) {
-      const result = incomingMessageSchema.safeParse({
-        receivedPhoneNumber: "+8613800000000",
-        sender: "955xx",
-        body: "bad timestamp",
-        receivedAt
-      });
-
-      expect(result.success).toBe(false);
-    }
   });
 
   it("treats blank and null SIM slots as absent", () => {
@@ -59,8 +45,7 @@ describe("incomingMessageSchema", () => {
         receivedPhoneNumber: "+8613800000000",
         simSlot,
         sender: "955xx",
-        body: "blank sim slot",
-        receivedAt: "2026-05-30T08:30:00.000Z"
+        body: "blank sim slot"
       });
 
       expect(parsed.simSlot).toBeUndefined();

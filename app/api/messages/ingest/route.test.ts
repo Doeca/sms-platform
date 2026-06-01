@@ -1,4 +1,12 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi
+} from "vitest";
 import { prisma } from "@/server/db/prisma";
 import { resetDatabase } from "@/server/db/test-utils";
 import { saveIncomingMessage } from "@/server/messages/repository";
@@ -20,6 +28,10 @@ afterAll(async () => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   await prisma.$disconnect();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 function request(body: unknown, token = "phone-secret") {
@@ -49,8 +61,7 @@ const validPayload = {
   deviceName: "Redmi 1",
   simSlot: 1,
   sender: "955xx",
-  body: "您的验证码是 123456",
-  receivedAt: "2026-05-30T08:30:00.000Z"
+  body: "您的验证码是 123456"
 };
 
 describe("POST /api/messages/ingest", () => {
@@ -85,10 +96,15 @@ describe("POST /api/messages/ingest", () => {
   });
 
   it("stores valid verification SMS payloads", async () => {
+    const now = new Date("2026-06-01T12:34:56.789Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
     const response = await POST(request(validPayload));
     const json = await response.json();
 
     expect(response.status).toBe(201);
+    expect(json.message.receivedAt).toBe(now.toISOString());
     expect(json.message.category).toBe("verification");
     expect(json.message.classificationSource).toBe("keyword");
     expect(json.message.isRead).toBe(false);
@@ -96,7 +112,27 @@ describe("POST /api/messages/ingest", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("ignores legacy receivedAt payload values and uses server time", async () => {
+    const now = new Date("2026-06-01T12:34:56.789Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    const response = await POST(
+      request({
+        ...validPayload,
+        receivedAt: "2020-01-01T00:00:00.000Z"
+      })
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(json.message.receivedAt).toBe(now.toISOString());
+  });
+
   it("returns success for duplicate retries", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T12:34:56.789Z"));
+
     await POST(request(validPayload));
     const response = await POST(request(validPayload));
     const json = await response.json();

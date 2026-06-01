@@ -10,57 +10,6 @@ export const readStateSchema = z.enum(["all", "unread", "read"]);
 
 const isoDateSchema = z.iso.datetime().transform((value) => new Date(value));
 
-const localDateTimePattern =
-  /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/;
-
-function parseLocalDateTime(value: string) {
-  const match = value.trim().match(localDateTimePattern);
-
-  if (!match) {
-    return null;
-  }
-
-  const [, yearValue, monthValue, dayValue, hourValue, minuteValue, secondValue] =
-    match;
-  const year = Number(yearValue);
-  const month = Number(monthValue);
-  const day = Number(dayValue);
-  const hour = Number(hourValue);
-  const minute = Number(minuteValue);
-  const second = Number(secondValue);
-  const date = new Date(year, month - 1, day, hour, minute, second);
-
-  if (
-    date.getFullYear() !== year ||
-    date.getMonth() !== month - 1 ||
-    date.getDate() !== day ||
-    date.getHours() !== hour ||
-    date.getMinutes() !== minute ||
-    date.getSeconds() !== second
-  ) {
-    return null;
-  }
-
-  return date;
-}
-
-const ingestDateSchema = z.union([
-  isoDateSchema,
-  z.string().transform((value, context) => {
-    const date = parseLocalDateTime(value);
-
-    if (!date) {
-      context.addIssue({
-        code: "custom",
-        message: "Invalid datetime"
-      });
-      return z.NEVER;
-    }
-
-    return date;
-  })
-]);
-
 const optionalSimSlotSchema = z.preprocess(
   (value) => {
     if (value === null) {
@@ -81,8 +30,7 @@ export const incomingMessageSchema = z.object({
   deviceName: z.string().trim().min(1).optional(),
   simSlot: optionalSimSlotSchema,
   sender: z.string().trim().min(1),
-  body: z.string().trim().min(1),
-  receivedAt: ingestDateSchema
+  body: z.string().trim().min(1)
 });
 
 export const listMessagesQuerySchema = z.object({
