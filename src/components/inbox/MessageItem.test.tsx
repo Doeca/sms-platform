@@ -149,6 +149,24 @@ describe("MessageItem", () => {
     expect(onOpen).toHaveBeenCalledWith("msg-1");
   });
 
+  it("opens the message when the unread indicator is clicked in normal mode", async () => {
+    const onOpen = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <MessageItem
+        message={message}
+        onCategoryChange={async () => undefined}
+        onOpen={onOpen}
+        onSelectionToggle={() => undefined}
+      />
+    );
+
+    await user.click(screen.getByLabelText("未读"));
+
+    expect(onOpen).toHaveBeenCalledWith("msg-1");
+  });
+
   it("opens the message from the keyboard in normal mode", async () => {
     const onOpen = vi.fn();
     const user = userEvent.setup();

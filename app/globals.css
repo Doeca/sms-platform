@@ -331,12 +331,15 @@ select {
   padding: 10px 12px 9px 10px;
 }
 
-.message-item__content > [role="button"] {
+.message-item:has(.message-item__content > [role="button"]) {
   cursor: pointer;
+}
+
+.message-item__content > [role="button"] {
   border-radius: 6px;
 }
 
-.message-item:has(.message-item__content > [role="button"]:hover) {
+.message-item:has(.message-item__content > [role="button"]):hover {
   border-color: #c8ccd3;
   background: #fbfbfc;
 }

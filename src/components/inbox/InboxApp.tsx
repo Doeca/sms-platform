@@ -113,6 +113,7 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   const locallyReadMessageIds = useRef<Set<string>>(new Set());
   const pendingReadMessageIds = useRef<Set<string>>(new Set());
   const [pendingBulkRead, setPendingBulkRead] = useState(false);
+  const appShellRef = useRef<HTMLElement>(null);
   const visibleRequestSequence = useRef(0);
   const currentVisibleFiltersRef = useRef<VisibleFilters>({
     category: "verification",
@@ -390,7 +391,7 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   ).length;
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" ref={appShellRef} tabIndex={-1}>
       <header className="page-header">
         <div>
           <h1>SMS Inbox</h1>
@@ -442,6 +443,7 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
           message={openMessage}
           onCategoryChange={handleCategoryUpdate}
           onClose={() => setOpenMessage(null)}
+          restoreFocusFallbackRef={appShellRef}
         />
       ) : null}
 

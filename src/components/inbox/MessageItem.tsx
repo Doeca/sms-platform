@@ -51,7 +51,10 @@ export function MessageItem({
   function handleArticleClick() {
     if (selectMode) {
       toggleSelection();
+      return;
     }
+
+    openMessage();
   }
 
   function handleRowClick(event: MouseEvent<HTMLElement>) {
@@ -63,6 +66,10 @@ export function MessageItem({
     }
 
     openMessage();
+  }
+
+  function stopRowClick(event: MouseEvent<HTMLElement>) {
+    event.stopPropagation();
   }
 
   function handleRowKeyDown(event: KeyboardEvent<HTMLElement>) {
@@ -89,7 +96,7 @@ export function MessageItem({
       className={`message-item ${
         message.isRead ? "is-read" : "is-unread"
       }${selectedClass}${modeClass}`}
-      onClick={selectMode ? handleArticleClick : undefined}
+      onClick={handleArticleClick}
     >
       {selectMode ? (
         <span
@@ -125,7 +132,11 @@ export function MessageItem({
         </div>
 
         {!selectMode && (
-          <footer className="message-item__actions">
+          <footer
+            className="message-item__actions"
+            onClick={stopRowClick}
+            onMouseDown={stopRowClick}
+          >
             <select
               aria-label="修改分类"
               className="message-item__category-control"

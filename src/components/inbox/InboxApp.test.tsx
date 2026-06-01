@@ -453,6 +453,10 @@ describe("InboxApp", () => {
       screen.getByRole("dialog", { name: "短信详情 955xx" })
     ).toBeInTheDocument();
     expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "关闭短信详情" }));
+
+    expect(screen.getByRole("main")).toHaveFocus();
   });
 
   it("keeps the detail category updated during a delayed refresh that omits the changed message", async () => {

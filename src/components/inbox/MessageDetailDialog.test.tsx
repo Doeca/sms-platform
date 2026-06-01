@@ -171,6 +171,32 @@ describe("MessageDetailDialog", () => {
     opener.remove();
   });
 
+  it("moves focus to a fallback when the opener is gone after unmount", () => {
+    const opener = document.createElement("button");
+    const fallback = document.createElement("main");
+    const restoreFocusFallbackRef = { current: fallback };
+
+    opener.textContent = "opener";
+    fallback.tabIndex = -1;
+    document.body.append(opener, fallback);
+    opener.focus();
+
+    const { unmount } = render(
+      <MessageDetailDialog
+        message={message}
+        onCategoryChange={async () => undefined}
+        onClose={() => undefined}
+        restoreFocusFallbackRef={restoreFocusFallbackRef}
+      />
+    );
+
+    opener.remove();
+    unmount();
+
+    expect(fallback).toHaveFocus();
+    fallback.remove();
+  });
+
   it("keeps Tab focus inside the dialog", async () => {
     const outsideButton = document.createElement("button");
     outsideButton.textContent = "outside";

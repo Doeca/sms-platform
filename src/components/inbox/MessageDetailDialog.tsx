@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import type { MouseEvent } from "react";
 import type { ClientCategory, ClientMessage } from "@/client/api";
 import { getCategoryLabel, inboxCategoryTabs } from "./category-config";
@@ -9,12 +9,14 @@ type MessageDetailDialogProps = {
   message: ClientMessage;
   onCategoryChange: (id: string, category: ClientCategory) => Promise<void>;
   onClose: () => void;
+  restoreFocusFallbackRef?: RefObject<HTMLElement | null>;
 };
 
 export function MessageDetailDialog({
   message,
   onCategoryChange,
-  onClose
+  onClose,
+  restoreFocusFallbackRef
 }: MessageDetailDialogProps) {
   const dialogRef = useRef<HTMLElement>(null);
   const onCloseRef = useRef(onClose);
@@ -35,7 +37,11 @@ export function MessageDetailDialog({
     dialogRef.current?.focus();
 
     return () => {
-      previousFocus?.focus();
+      const focusTarget = previousFocus?.isConnected
+        ? previousFocus
+        : restoreFocusFallbackRef?.current;
+
+      focusTarget?.focus();
     };
   }, []);
 
