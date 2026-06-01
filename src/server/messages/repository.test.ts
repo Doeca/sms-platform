@@ -67,6 +67,89 @@ describe("message repository", () => {
     expect(duplicate.message.id).toBe(first.message.id);
   });
 
+  it("returns an existing message for identical content from the same source within one minute", async () => {
+    const first = await saveIncomingMessage(
+      {
+        receivedPhoneNumber: "+8613800000000",
+        deviceName: "Redmi 1",
+        simSlot: 1,
+        sender: "955xx",
+        body: "您的验证码是 123456",
+        receivedAt: new Date("2026-05-30T08:30:00.000Z")
+      },
+      { category: "verification", source: "keyword" }
+    );
+    const duplicate = await saveIncomingMessage(
+      {
+        receivedPhoneNumber: "+8613800000000",
+        deviceName: "Redmi 1",
+        simSlot: 1,
+        sender: "955xx",
+        body: "您的验证码是 123456",
+        receivedAt: new Date("2026-05-30T08:30:30.000Z")
+      },
+      { category: "verification", source: "keyword" }
+    );
+
+    expect(duplicate.duplicate).toBe(true);
+    expect(duplicate.message.id).toBe(first.message.id);
+    await expect(prisma.message.count()).resolves.toBe(1);
+  });
+
+  it("stores identical content from the same source after one minute", async () => {
+    const input = {
+      receivedPhoneNumber: "+8613800000000",
+      deviceName: "Redmi 1",
+      simSlot: 1,
+      sender: "955xx",
+      body: "您的验证码是 123456"
+    };
+
+    const first = await saveIncomingMessage(
+      {
+        ...input,
+        receivedAt: new Date("2026-05-30T08:30:00.000Z")
+      },
+      { category: "verification", source: "keyword" }
+    );
+    const second = await saveIncomingMessage(
+      {
+        ...input,
+        receivedAt: new Date("2026-05-30T08:31:01.000Z")
+      },
+      { category: "verification", source: "keyword" }
+    );
+
+    expect(second.duplicate).toBe(false);
+    expect(second.message.id).not.toBe(first.message.id);
+    await expect(prisma.message.count()).resolves.toBe(2);
+  });
+
+  it("stores identical content from different phone numbers within one minute", async () => {
+    const first = await saveIncomingMessage(
+      {
+        receivedPhoneNumber: "+8613800000000",
+        sender: "955xx",
+        body: "您的验证码是 123456",
+        receivedAt: new Date("2026-05-30T08:30:00.000Z")
+      },
+      { category: "verification", source: "keyword" }
+    );
+    const second = await saveIncomingMessage(
+      {
+        receivedPhoneNumber: "+8613900000000",
+        sender: "955xx",
+        body: "您的验证码是 123456",
+        receivedAt: new Date("2026-05-30T08:30:30.000Z")
+      },
+      { category: "verification", source: "keyword" }
+    );
+
+    expect(second.duplicate).toBe(false);
+    expect(second.message.id).not.toBe(first.message.id);
+    await expect(prisma.message.count()).resolves.toBe(2);
+  });
+
   it("returns an existing message when duplicate retries arrive concurrently", async () => {
     const input = {
       receivedPhoneNumber: "+8613800000000",

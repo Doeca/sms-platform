@@ -53,6 +53,8 @@ Required fields are `receivedPhoneNumber`, `sender`, and `body`.
 labels clearer.
 The server sets `receivedAt` from the ingest request time. Legacy clients may
 still send `receivedAt`, but the value is ignored.
+If the same source sends the same `sender` and `body` again within one minute,
+the server treats it as a duplicate and returns the existing message.
 
 ## Classification
 

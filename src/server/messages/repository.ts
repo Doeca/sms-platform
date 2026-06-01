@@ -12,6 +12,8 @@ type PersistIncomingMessageInput = IncomingMessageInput & {
   receivedAt: Date;
 };
 
+const RECENT_DUPLICATE_WINDOW_MS = 60_000;
+
 async function findOrCreateSource(input: IncomingMessageInput) {
   const identityKey = buildSourceIdentityKey(input);
   const existingIdentity = await prisma.messageSourceIdentity.findUnique({
@@ -100,6 +102,25 @@ function isUniqueConstraintError(error: unknown, field: string) {
   );
 }
 
+async function findRecentDuplicate(
+  input: PersistIncomingMessageInput,
+  sourceId: string
+) {
+  return prisma.message.findFirst({
+    where: {
+      sourceId,
+      sender: input.sender,
+      body: input.body,
+      receivedAt: {
+        gte: new Date(input.receivedAt.getTime() - RECENT_DUPLICATE_WINDOW_MS),
+        lte: input.receivedAt
+      }
+    },
+    orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
+    include: messageInclude()
+  });
+}
+
 export async function saveIncomingMessage(
   input: PersistIncomingMessageInput,
   classification: ClassificationResult
@@ -118,6 +139,15 @@ export async function saveIncomingMessage(
   }
 
   const source = await findOrCreateSource(input);
+  const recentDuplicate = await findRecentDuplicate(input, source.id);
+
+  if (recentDuplicate) {
+    return {
+      duplicate: true,
+      message: recentDuplicate
+    };
+  }
+
   try {
     const message = await prisma.message.create({
       data: {

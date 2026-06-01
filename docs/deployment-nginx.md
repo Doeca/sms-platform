@@ -271,6 +271,8 @@ Content-Type: application/json
 
 服务器会自动分类，手机端不需要提交分类。服务器会使用接口收到请求时的时间作为
 `receivedAt`。旧手机端如果继续发送 `receivedAt`，后端也会忽略这个值。
+同一个来源在 1 分钟内重复推送相同 `sender` 和 `body` 时，服务器会按重复短信处理，
+不会新增记录。
 
 用 curl 测试：
 
@@ -288,6 +290,7 @@ curl -X POST "https://你的域名/api/messages/ingest" \
 ```
 
 写入成功返回 `201`，响应里的 `message.receivedAt` 是服务器生成的接收时间。
+重复短信返回 `200` 且响应里会有 `duplicate: true`。
 
 ## 8. 网页访问
 
