@@ -77,6 +77,19 @@ function markMessageReadInInbox(
   };
 }
 
+function applyLocalReadStateToInbox(
+  inbox: InboxResponse,
+  readMessageIds: Set<string>
+): InboxResponse {
+  return inbox.messages.reduce((currentInbox, message) => {
+    if (!readMessageIds.has(message.id)) {
+      return currentInbox;
+    }
+
+    return markMessageReadInInbox(currentInbox, message);
+  }, inbox);
+}
+
 export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   const [authenticated, setAuthenticated] = useState(initialAuthenticated);
   const [accessError, setAccessError] = useState<string | null>(null);
@@ -96,7 +109,8 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(
     () => new Set()
   );
-  const [openMessageId, setOpenMessageId] = useState<string | null>(null);
+  const [openMessage, setOpenMessage] = useState<ClientMessage | null>(null);
+  const locallyReadMessageIds = useRef<Set<string>>(new Set());
   const pendingReadMessageIds = useRef<Set<string>>(new Set());
   const [pendingBulkRead, setPendingBulkRead] = useState(false);
   const visibleRequestSequence = useRef(0);
@@ -130,7 +144,23 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
         return;
       }
 
-      setInbox(nextInbox);
+      const reconciledInbox = applyLocalReadStateToInbox(
+        nextInbox,
+        locallyReadMessageIds.current
+      );
+
+      setInbox(reconciledInbox);
+      setOpenMessage((current) => {
+        if (current === null) {
+          return null;
+        }
+
+        const refreshedMessage = reconciledInbox.messages.find(
+          (message) => message.id === current.id
+        );
+
+        return refreshedMessage ?? current;
+      });
       setInboxError(null);
     } catch (error) {
       if (requestSequence === visibleRequestSequence.current) {
@@ -238,19 +268,30 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
       return;
     }
 
-    setOpenMessageId(id);
+    const nextOpenMessage = locallyReadMessageIds.current.has(id)
+      ? { ...message, isRead: true }
+      : message;
 
-    if (message.isRead || pendingReadMessageIds.current.has(id)) {
+    setOpenMessage(nextOpenMessage);
+
+    if (
+      message.isRead ||
+      locallyReadMessageIds.current.has(id) ||
+      pendingReadMessageIds.current.has(id)
+    ) {
       return;
     }
 
     pendingReadMessageIds.current.add(id);
+    locallyReadMessageIds.current.add(id);
     setInbox((current) => markMessageReadInInbox(current, message));
+    setOpenMessage({ ...message, isRead: true });
     setInboxError(null);
 
     try {
       await updateMessage(id, { isRead: true });
     } catch {
+      locallyReadMessageIds.current.delete(id);
       const refreshResults = await Promise.allSettled([
         loadMessages(),
         loadNotificationMessages()
@@ -315,13 +356,18 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   }, [activeCategory, readState]);
 
   useEffect(() => {
-    if (
-      openMessageId !== null &&
-      !inbox.messages.some((message) => message.id === openMessageId)
-    ) {
-      setOpenMessageId(null);
+    if (openMessage === null) {
+      return;
     }
-  }, [inbox.messages, openMessageId]);
+
+    const refreshedMessage = inbox.messages.find(
+      (message) => message.id === openMessage.id
+    );
+
+    if (refreshedMessage) {
+      setOpenMessage(refreshedMessage);
+    }
+  }, [inbox.messages, openMessage]);
 
   useEffect(() => {
     if (!authenticated) {
@@ -349,10 +395,6 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   const selectedUnreadCount = inbox.messages.filter(
     (message) => selectedMessageIds.has(message.id) && !message.isRead
   ).length;
-  const openMessage =
-    openMessageId === null
-      ? null
-      : inbox.messages.find((message) => message.id === openMessageId) ?? null;
 
   return (
     <main className="app-shell">
@@ -406,7 +448,7 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
         <MessageDetailDialog
           message={openMessage}
           onCategoryChange={handleCategoryUpdate}
-          onClose={() => setOpenMessageId(null)}
+          onClose={() => setOpenMessage(null)}
         />
       ) : null}
 
