@@ -193,6 +193,23 @@ describe("MessageItem", () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 
+  it("keeps the category control outside the row button target", () => {
+    render(
+      <MessageItem
+        message={message}
+        onCategoryChange={async () => undefined}
+        onOpen={() => undefined}
+        onSelectionToggle={() => undefined}
+      />
+    );
+
+    const row = screen.getByRole("button", { name: "短信 955xx" });
+    const categoryControl = screen.getByLabelText("修改分类");
+
+    expect(row).not.toContainElement(categoryControl);
+    expect(categoryControl.closest('[role="button"]')).toBeNull();
+  });
+
   it("does not open the message when clicked in select mode", async () => {
     const onOpen = vi.fn();
     const onSelectionToggle = vi.fn();

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { KeyboardEvent, MouseEvent } from "react";
+import type { KeyboardEvent } from "react";
 import type { ClientCategory, ClientMessage } from "@/client/api";
 import { getCategoryLabel, inboxCategoryTabs } from "./category-config";
 
@@ -13,16 +13,6 @@ type MessageItemProps = {
   onOpen?: (id: string) => void;
   onSelectionToggle: (id: string) => void;
 };
-
-function isInteractiveTarget(target: EventTarget | null) {
-  if (!(target instanceof Element)) {
-    return false;
-  }
-
-  return Boolean(
-    target.closest("a, button, input, label, select, textarea")
-  );
-}
 
 export function MessageItem({
   message,
@@ -58,11 +48,7 @@ export function MessageItem({
     onOpen(message.id);
   }
 
-  function handleRowClick(event: MouseEvent<HTMLElement>) {
-    if (!selectMode && isInteractiveTarget(event.target)) {
-      return;
-    }
-
+  function handleRowClick() {
     if (selectMode) {
       toggleSelection();
       return;
@@ -92,15 +78,9 @@ export function MessageItem({
 
   return (
     <article
-      aria-label={`短信 ${message.sender}`}
-      aria-pressed={selectMode ? selected : undefined}
       className={`message-item ${
         message.isRead ? "is-read" : "is-unread"
       }${selectedClass}${modeClass}`}
-      onClick={handleRowClick}
-      onKeyDown={handleRowKeyDown}
-      role="button"
-      tabIndex={0}
     >
       {selectMode ? (
         <span
@@ -116,15 +96,24 @@ export function MessageItem({
       )}
 
       <div className="message-item__content">
-        <header className="message-item__header">
-          <strong>{message.sender}</strong>
-          <span>{message.source.label}</span>
-          <time dateTime={message.receivedAt}>
-            {new Date(message.receivedAt).toLocaleString("zh-CN")}
-          </time>
-        </header>
+        <div
+          aria-label={`短信 ${message.sender}`}
+          aria-pressed={selectMode ? selected : undefined}
+          onClick={handleRowClick}
+          onKeyDown={handleRowKeyDown}
+          role="button"
+          tabIndex={0}
+        >
+          <header className="message-item__header">
+            <strong>{message.sender}</strong>
+            <span>{message.source.label}</span>
+            <time dateTime={message.receivedAt}>
+              {new Date(message.receivedAt).toLocaleString("zh-CN")}
+            </time>
+          </header>
 
-        <p className="message-item__body">{message.body}</p>
+          <p className="message-item__body">{message.body}</p>
+        </div>
 
         {!selectMode && (
           <footer className="message-item__actions">
