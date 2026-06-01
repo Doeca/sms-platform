@@ -254,7 +254,14 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
 
   async function handleCategoryUpdate(id: string, category: ClientCategory) {
     try {
-      await updateMessage(id, { category });
+      const { message } = await updateMessage(id, { category });
+      const updatedMessage = locallyReadMessageIds.current.has(id)
+        ? { ...message, isRead: true }
+        : message;
+
+      setOpenMessage((current) =>
+        current?.id === id ? updatedMessage : current
+      );
       await loadMessages();
     } catch {
       setInboxError("短信更新失败");

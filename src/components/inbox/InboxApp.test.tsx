@@ -455,6 +455,74 @@ describe("InboxApp", () => {
     expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
   });
 
+  it("keeps the detail category updated when refresh omits the changed message", async () => {
+    let categoryPatchSucceeded = false;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (
+        url === "/api/messages/msg-1" &&
+        init?.method === "PATCH" &&
+        init.body === JSON.stringify({ isRead: true })
+      ) {
+        return Response.json({
+          message: {
+            ...inboxPayload.messages[0],
+            isRead: true
+          }
+        });
+      }
+
+      if (
+        url === "/api/messages/msg-1" &&
+        init?.method === "PATCH" &&
+        init.body === JSON.stringify({ category: "other" })
+      ) {
+        categoryPatchSucceeded = true;
+        return Response.json({
+          message: {
+            ...inboxPayload.messages[0],
+            category: "other",
+            isRead: true
+          }
+        });
+      }
+
+      if (
+        url === "/api/messages?category=verification" &&
+        categoryPatchSucceeded
+      ) {
+        return Response.json(emptyInboxPayload);
+      }
+
+      return Response.json(inboxPayload);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<InboxApp initialAuthenticated />);
+
+    await waitFor(() => {
+      expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "短信 955xx" }));
+    await user.selectOptions(screen.getByLabelText("修改详情分类"), "other");
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/messages/msg-1",
+        expect.objectContaining({
+          body: JSON.stringify({ category: "other" }),
+          method: "PATCH"
+        })
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText("修改详情分类")).toHaveValue("other");
+    });
+    expect(
+      screen.getByRole("dialog", { name: "短信详情 955xx" })
+    ).toBeInTheDocument();
+  });
+
   it("does not send a read patch for an already-read message", async () => {
     const fetchMock = vi.fn(async () => Response.json(readInboxPayload));
     vi.stubGlobal("fetch", fetchMock);
