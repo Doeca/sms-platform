@@ -180,7 +180,7 @@ select {
 .message-detail-dialog:focus-visible,
 .message-detail-dialog button:focus-visible,
 .message-detail-dialog select:focus-visible,
-.message-item:focus-visible,
+.message-item__content > [role="button"]:focus-visible,
 .message-item__category-control:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -331,11 +331,12 @@ select {
   padding: 10px 12px 9px 10px;
 }
 
-.message-item[role="button"] {
+.message-item__content > [role="button"] {
   cursor: pointer;
+  border-radius: 6px;
 }
 
-.message-item[role="button"]:hover {
+.message-item:has(.message-item__content > [role="button"]:hover) {
   border-color: #c8ccd3;
   background: #fbfbfc;
 }
@@ -347,6 +348,10 @@ select {
 
 .message-item.is-select-mode {
   cursor: pointer;
+}
+
+.message-item:has(.message-item__content > [role="button"]:focus-visible) {
+  border-color: var(--accent);
 }
 
 .message-item.is-selected {
@@ -525,7 +530,7 @@ select {
   margin: 14px 0 0;
 }
 
-.message-detail-dialog__meta div {
+.message-detail-dialog__meta > div {
   min-width: 0;
 }
 
@@ -702,7 +707,7 @@ select {
   }
 
   .message-detail-dialog {
-    max-height: min(720px, calc(100vh - 20px));
+    max-height: min(720px, calc(100vh - 40px));
     padding: 14px;
   }
 
