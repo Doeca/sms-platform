@@ -112,6 +112,25 @@ const twoUnreadMessagesPayload = {
   }
 };
 
+const readInboxPayload = {
+  ...inboxPayload,
+  messages: [
+    {
+      ...inboxPayload.messages[0],
+      isRead: true
+    }
+  ],
+  stats: {
+    ...inboxPayload.stats,
+    unread: 0,
+    unreadByCategory: {
+      verification: 0,
+      loan_collection: 0,
+      other: 0
+    }
+  }
+};
+
 const financialPayload = {
   ...inboxPayload,
   messages: [
@@ -206,6 +225,134 @@ describe("InboxApp", () => {
     expect(screen.queryByLabelText("访问密钥")).not.toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith("/api/messages?category=verification");
     expect(fetch).not.toHaveBeenCalledWith("/api/messages");
+  });
+
+  it("opens a message detail dialog and marks an unread message read", async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/api/messages/msg-1" && init?.method === "PATCH") {
+        return Response.json({
+          message: {
+            ...inboxPayload.messages[0],
+            isRead: true
+          }
+        });
+      }
+
+      return Response.json(inboxPayload);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<InboxApp initialAuthenticated />);
+
+    await waitFor(() => {
+      expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "短信 955xx" }));
+
+    expect(
+      screen.getByRole("dialog", { name: "短信详情 955xx" })
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByLabelText("未读")).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "验证码" })).not.toHaveTextContent(
+      "1"
+    );
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/messages/msg-1",
+        expect.objectContaining({
+          body: JSON.stringify({ isRead: true }),
+          method: "PATCH"
+        })
+      );
+    });
+  });
+
+  it("keeps an opened message visible under the unread filter after optimistic read", async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/api/messages/msg-1" && init?.method === "PATCH") {
+        return Response.json({
+          message: {
+            ...inboxPayload.messages[0],
+            isRead: true
+          }
+        });
+      }
+
+      return Response.json(inboxPayload);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<InboxApp initialAuthenticated />);
+
+    await waitFor(() => {
+      expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "筛选" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "未读" }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/messages?readState=unread&category=verification"
+      );
+    });
+
+    await user.click(screen.getByRole("button", { name: "短信 955xx" }));
+
+    expect(
+      screen.getByRole("dialog", { name: "短信详情 955xx" })
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("您的验证码是 123456").length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(screen.queryByLabelText("未读")).not.toBeInTheDocument();
+    });
+  });
+
+  it("does not send a read patch for an already-read message", async () => {
+    const fetchMock = vi.fn(async () => Response.json(readInboxPayload));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<InboxApp initialAuthenticated />);
+
+    await waitFor(() => {
+      expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "短信 955xx" }));
+
+    expect(
+      screen.getByRole("dialog", { name: "短信详情 955xx" })
+    ).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) => url === "/api/messages/msg-1" && init?.method === "PATCH"
+      )
+    ).toBe(false);
+  });
+
+  it("keeps select mode clicks as selection instead of opening details", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json(twoUnreadMessagesPayload))
+    );
+    const user = userEvent.setup();
+
+    render(<InboxApp initialAuthenticated />);
+
+    await waitFor(() => {
+      expect(screen.getByText("第二条未读验证码")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "选择" }));
+    await user.click(screen.getByRole("button", { name: "短信 955xx" }));
+
+    expect(screen.getByText("已选择 1 条")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("shows an access error when the access key is rejected", async () => {
@@ -470,6 +617,73 @@ describe("InboxApp", () => {
     await waitFor(() => {
       expect(screen.getByText("短信更新失败")).toBeInTheDocument();
     });
+  });
+
+  it("updates category from the message detail dialog", async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/api/messages/msg-1" && init?.method === "PATCH") {
+        return Response.json({ message: inboxPayload.messages[0] });
+      }
+
+      return Response.json(inboxPayload);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<InboxApp initialAuthenticated />);
+
+    await waitFor(() => {
+      expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "短信 955xx" }));
+    await user.selectOptions(screen.getByLabelText("修改详情分类"), "other");
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/messages/msg-1",
+        expect.objectContaining({
+          body: JSON.stringify({ category: "other" }),
+          method: "PATCH"
+        })
+      );
+    });
+  });
+
+  it("shows an error and refreshes when marking a detail message read fails", async () => {
+    let patchAttempted = false;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/api/messages/msg-1" && init?.method === "PATCH") {
+        patchAttempted = true;
+        throw new Error("database down");
+      }
+
+      return Response.json(inboxPayload);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<InboxApp initialAuthenticated />);
+
+    await waitFor(() => {
+      expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
+    });
+    const visibleFetchesBeforeOpen = fetchMock.mock.calls.filter(
+      ([url]) => url === "/api/messages?category=verification"
+    ).length;
+    await user.click(screen.getByRole("button", { name: "短信 955xx" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("短信更新失败")).toBeInTheDocument();
+    });
+    expect(patchAttempted).toBe(true);
+    expect(
+      screen.getByRole("dialog", { name: "短信详情 955xx" })
+    ).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.filter(
+        ([url]) => url === "/api/messages?category=verification"
+      ).length
+    ).toBeGreaterThan(visibleFetchesBeforeOpen);
   });
 
   it("selects multiple messages and marks unread selections as read", async () => {

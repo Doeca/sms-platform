@@ -6,6 +6,7 @@ import {
   fetchMessages,
   updateMessage,
   type ClientCategory,
+  type ClientMessage,
   type ClientReadState,
   type InboxResponse
 } from "@/client/api";
@@ -14,6 +15,7 @@ import { useVerificationNotifications } from "@/hooks/useVerificationNotificatio
 import { POLL_INTERVAL_MS } from "@/lib/app-info";
 import { CategoryTabs } from "./CategoryTabs";
 import { getEmptyMessage } from "./category-config";
+import { MessageDetailDialog } from "./MessageDetailDialog";
 import { MessageList } from "./MessageList";
 import { NotificationToggle } from "./NotificationToggle";
 import { ReadFilterMenu } from "./ReadFilterMenu";
@@ -44,6 +46,37 @@ type VisibleFilters = {
   readState: ClientReadState;
 };
 
+function decrementUnreadStats(
+  stats: InboxResponse["stats"],
+  category: ClientCategory
+): InboxResponse["stats"] {
+  return {
+    ...stats,
+    unread: Math.max(stats.unread - 1, 0),
+    unreadByCategory: {
+      ...stats.unreadByCategory,
+      [category]: Math.max(stats.unreadByCategory[category] - 1, 0)
+    }
+  };
+}
+
+function markMessageReadInInbox(
+  inbox: InboxResponse,
+  message: ClientMessage
+): InboxResponse {
+  if (message.isRead) {
+    return inbox;
+  }
+
+  return {
+    ...inbox,
+    messages: inbox.messages.map((item) =>
+      item.id === message.id ? { ...item, isRead: true } : item
+    ),
+    stats: decrementUnreadStats(inbox.stats, message.category)
+  };
+}
+
 export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   const [authenticated, setAuthenticated] = useState(initialAuthenticated);
   const [accessError, setAccessError] = useState<string | null>(null);
@@ -63,6 +96,8 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(
     () => new Set()
   );
+  const [openMessageId, setOpenMessageId] = useState<string | null>(null);
+  const pendingReadMessageIds = useRef<Set<string>>(new Set());
   const [pendingBulkRead, setPendingBulkRead] = useState(false);
   const visibleRequestSequence = useRef(0);
   const currentVisibleFiltersRef = useRef<VisibleFilters>({
@@ -196,6 +231,41 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
     }
   }
 
+  async function handleMessageOpen(id: string) {
+    const message = inbox.messages.find((item) => item.id === id);
+
+    if (!message) {
+      return;
+    }
+
+    setOpenMessageId(id);
+
+    if (message.isRead || pendingReadMessageIds.current.has(id)) {
+      return;
+    }
+
+    pendingReadMessageIds.current.add(id);
+    setInbox((current) => markMessageReadInInbox(current, message));
+    setInboxError(null);
+
+    try {
+      await updateMessage(id, { isRead: true });
+    } catch {
+      const refreshResults = await Promise.allSettled([
+        loadMessages(),
+        loadNotificationMessages()
+      ]);
+
+      if (refreshResults.some((result) => result.status === "rejected")) {
+        setInboxError("短信更新失败，短信刷新失败");
+      } else {
+        setInboxError("短信更新失败");
+      }
+    } finally {
+      pendingReadMessageIds.current.delete(id);
+    }
+  }
+
   async function handleBulkMarkRead() {
     const selectedUnreadIds = inbox.messages
       .filter((message) => selectedMessageIds.has(message.id) && !message.isRead)
@@ -245,6 +315,15 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   }, [activeCategory, readState]);
 
   useEffect(() => {
+    if (
+      openMessageId !== null &&
+      !inbox.messages.some((message) => message.id === openMessageId)
+    ) {
+      setOpenMessageId(null);
+    }
+  }, [inbox.messages, openMessageId]);
+
+  useEffect(() => {
     if (!authenticated) {
       return;
     }
@@ -270,6 +349,10 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   const selectedUnreadCount = inbox.messages.filter(
     (message) => selectedMessageIds.has(message.id) && !message.isRead
   ).length;
+  const openMessage =
+    openMessageId === null
+      ? null
+      : inbox.messages.find((message) => message.id === openMessageId) ?? null;
 
   return (
     <main className="app-shell">
@@ -315,8 +398,17 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
         selectedIds={selectedMessageIds}
         selectMode={selectMode}
         onCategoryChange={handleCategoryUpdate}
+        onMessageOpen={handleMessageOpen}
         onSelectionToggle={handleSelectionToggle}
       />
+
+      {openMessage ? (
+        <MessageDetailDialog
+          message={openMessage}
+          onCategoryChange={handleCategoryUpdate}
+          onClose={() => setOpenMessageId(null)}
+        />
+      ) : null}
 
       {selectMode ? (
         <div className="bulk-action-bar" role="region" aria-label="批量操作">
