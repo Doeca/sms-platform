@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum MessageCategory {
+  verification
+  loan_collection
+  other
+}
+
+enum ClassificationSource {
+  keyword
+  kimi
+  manual
+  fallback
+}
+
+model MessageSource {
+  id                  String    @id @default(cuid())
+  receivedPhoneNumber String
+  deviceName          String?
+  simSlot             Int?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  messages            Message[]
+  identity            MessageSourceIdentity?
+
+  @@index([receivedPhoneNumber])
+  @@index([deviceName])
+}
+
+model MessageSourceIdentity {
+  identityKey String        @id
+  sourceId    String        @unique
+  source      MessageSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Message {
+  id                   String               @id @default(cuid())
+  sourceId             String
+  source               MessageSource        @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  sender               String
+  body                 String
+  receivedAt           DateTime
+  category             MessageCategory
+  classificationSource ClassificationSource
+  classificationError  String?
+  isRead               Boolean              @default(false)
+  dedupeKey            String               @unique
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  @@index([receivedAt])
+  @@index([createdAt])
+  @@index([isRead])
+  @@index([category])
+  @@index([sourceId])
+}

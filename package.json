@@ -1,0 +1,36 @@
+{
+  "name": "sms-platform",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node node_modules/next/dist/bin/next dev",
+    "build": "node node_modules/next/dist/bin/next build",
+    "start": "node node_modules/next/dist/bin/next start",
+    "test": "node node_modules/vitest/vitest.mjs run --pool threads",
+    "test:watch": "node node_modules/vitest/vitest.mjs --pool threads",
+    "predb:push": "node scripts/ensure-sqlite-db.mjs",
+    "db:generate": "node node_modules/prisma/build/index.js generate",
+    "db:push": "node node_modules/prisma/build/index.js db push",
+    "db:studio": "node node_modules/prisma/build/index.js studio"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3",
+    "lucide-react": "1.17.0",
+    "next": "16.2.6",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "14.6.1",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "jsdom": "29.1.1",
+    "prisma": "6.19.3",
+    "typescript": "^5.9.0",
+    "vitest": "4.1.7"
+  }
+}
