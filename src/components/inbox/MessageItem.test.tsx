@@ -59,6 +59,7 @@ describe("MessageItem", () => {
       <MessageItem
         message={message}
         onCategoryChange={onCategoryChange}
+        onOpen={() => undefined}
         onSelectionToggle={() => undefined}
       />
     );
@@ -128,6 +129,89 @@ describe("MessageItem", () => {
     await user.click(row);
 
     expect(onSelectionToggle).toHaveBeenCalledWith("msg-1");
+  });
+
+  it("opens the message when the row is clicked in normal mode", async () => {
+    const onOpen = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <MessageItem
+        message={message}
+        onCategoryChange={async () => undefined}
+        onOpen={onOpen}
+        onSelectionToggle={() => undefined}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "短信 955xx" }));
+
+    expect(onOpen).toHaveBeenCalledWith("msg-1");
+  });
+
+  it("opens the message from the keyboard in normal mode", async () => {
+    const onOpen = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <MessageItem
+        message={message}
+        onCategoryChange={async () => undefined}
+        onOpen={onOpen}
+        onSelectionToggle={() => undefined}
+      />
+    );
+
+    const row = screen.getByRole("button", { name: "短信 955xx" });
+
+    row.focus();
+    await user.keyboard("{Enter}");
+    await user.keyboard(" ");
+
+    expect(onOpen).toHaveBeenCalledTimes(2);
+    expect(onOpen).toHaveBeenNthCalledWith(1, "msg-1");
+    expect(onOpen).toHaveBeenNthCalledWith(2, "msg-1");
+  });
+
+  it("does not open the message when the category control is used", async () => {
+    const onCategoryChange = vi.fn(async () => undefined);
+    const onOpen = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <MessageItem
+        message={message}
+        onCategoryChange={onCategoryChange}
+        onOpen={onOpen}
+        onSelectionToggle={() => undefined}
+      />
+    );
+
+    await user.selectOptions(screen.getByLabelText("修改分类"), "other");
+
+    expect(onCategoryChange).toHaveBeenCalledWith("msg-1", "other");
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it("does not open the message when clicked in select mode", async () => {
+    const onOpen = vi.fn();
+    const onSelectionToggle = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <MessageItem
+        message={message}
+        selectMode
+        onCategoryChange={async () => undefined}
+        onOpen={onOpen}
+        onSelectionToggle={onSelectionToggle}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "短信 955xx" }));
+
+    expect(onSelectionToggle).toHaveBeenCalledWith("msg-1");
+    expect(onOpen).not.toHaveBeenCalled();
   });
 
   it("toggles selection when the row is clicked in select mode", async () => {

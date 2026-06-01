@@ -1,34 +1,35 @@
 "use client";
 
 import { useState } from "react";
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, MouseEvent } from "react";
 import type { ClientCategory, ClientMessage } from "@/client/api";
+import { getCategoryLabel, inboxCategoryTabs } from "./category-config";
 
 type MessageItemProps = {
   message: ClientMessage;
   selected?: boolean;
   selectMode?: boolean;
   onCategoryChange: (id: string, category: ClientCategory) => Promise<void>;
+  onOpen?: (id: string) => void;
   onSelectionToggle: (id: string) => void;
 };
 
-const categoryLabels: Record<ClientCategory, string> = {
-  verification: "验证码",
-  loan_collection: "金融",
-  other: "其他"
-};
+function isInteractiveTarget(target: EventTarget | null) {
+  if (!(target instanceof Element)) {
+    return false;
+  }
 
-const categoryOptions: ClientCategory[] = [
-  "verification",
-  "loan_collection",
-  "other"
-];
+  return Boolean(
+    target.closest("a, button, input, label, select, textarea")
+  );
+}
 
 export function MessageItem({
   message,
   selected = false,
   selectMode = false,
   onCategoryChange,
+  onOpen = () => undefined,
   onSelectionToggle
 }: MessageItemProps) {
   const [pending, setPending] = useState(false);
@@ -53,6 +54,23 @@ export function MessageItem({
     onSelectionToggle(message.id);
   }
 
+  function openMessage() {
+    onOpen(message.id);
+  }
+
+  function handleRowClick(event: MouseEvent<HTMLElement>) {
+    if (!selectMode && isInteractiveTarget(event.target)) {
+      return;
+    }
+
+    if (selectMode) {
+      toggleSelection();
+      return;
+    }
+
+    openMessage();
+  }
+
   function handleRowKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.target !== event.currentTarget) {
       return;
@@ -63,7 +81,13 @@ export function MessageItem({
     }
 
     event.preventDefault();
-    toggleSelection();
+
+    if (selectMode) {
+      toggleSelection();
+      return;
+    }
+
+    openMessage();
   }
 
   return (
@@ -73,10 +97,10 @@ export function MessageItem({
       className={`message-item ${
         message.isRead ? "is-read" : "is-unread"
       }${selectedClass}${modeClass}`}
-      onClick={selectMode ? toggleSelection : undefined}
-      onKeyDown={selectMode ? handleRowKeyDown : undefined}
-      role={selectMode ? "button" : undefined}
-      tabIndex={selectMode ? 0 : undefined}
+      onClick={handleRowClick}
+      onKeyDown={handleRowKeyDown}
+      role="button"
+      tabIndex={0}
     >
       {selectMode ? (
         <span
@@ -113,9 +137,9 @@ export function MessageItem({
                 void changeCategory(event.target.value as ClientCategory)
               }
             >
-              {categoryOptions.map((category) => (
-                <option key={category} value={category}>
-                  {categoryLabels[category]}
+              {inboxCategoryTabs.map((tab) => (
+                <option key={tab.category} value={tab.category}>
+                  {getCategoryLabel(tab.category)}
                 </option>
               ))}
             </select>
