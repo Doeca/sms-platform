@@ -455,8 +455,9 @@ describe("InboxApp", () => {
     expect(screen.getByText("您的验证码是 123456")).toBeInTheDocument();
   });
 
-  it("keeps the detail category updated when refresh omits the changed message", async () => {
+  it("keeps the detail category updated during a delayed refresh that omits the changed message", async () => {
     let categoryPatchSucceeded = false;
+    const delayedVisibleRefresh = createDeferredResponse();
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (
         url === "/api/messages/msg-1" &&
@@ -490,7 +491,7 @@ describe("InboxApp", () => {
         url === "/api/messages?category=verification" &&
         categoryPatchSucceeded
       ) {
-        return Response.json(emptyInboxPayload);
+        return delayedVisibleRefresh.promise;
       }
 
       return Response.json(inboxPayload);
@@ -515,6 +516,17 @@ describe("InboxApp", () => {
         })
       );
     });
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.filter(
+          ([url]) => url === "/api/messages?category=verification"
+        ).length
+      ).toBeGreaterThan(2);
+    });
+    expect(screen.getByLabelText("修改详情分类")).toHaveValue("other");
+
+    delayedVisibleRefresh.resolve(Response.json(emptyInboxPayload));
+
     await waitFor(() => {
       expect(screen.getByLabelText("修改详情分类")).toHaveValue("other");
     });

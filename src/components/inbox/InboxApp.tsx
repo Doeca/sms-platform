@@ -363,20 +363,6 @@ export function InboxApp({ initialAuthenticated = false }: InboxAppProps) {
   }, [activeCategory, readState]);
 
   useEffect(() => {
-    if (openMessage === null) {
-      return;
-    }
-
-    const refreshedMessage = inbox.messages.find(
-      (message) => message.id === openMessage.id
-    );
-
-    if (refreshedMessage) {
-      setOpenMessage(refreshedMessage);
-    }
-  }, [inbox.messages, openMessage]);
-
-  useEffect(() => {
     if (!authenticated) {
       return;
     }
