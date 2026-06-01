@@ -9,6 +9,7 @@ type MessageListProps = {
   selectedIds: Set<string>;
   selectMode: boolean;
   onCategoryChange: (id: string, category: ClientCategory) => Promise<void>;
+  onMessageOpen?: (id: string) => void;
   onSelectionToggle: (id: string) => void;
 };
 
@@ -18,6 +19,7 @@ export function MessageList({
   selectedIds,
   selectMode,
   onCategoryChange,
+  onMessageOpen,
   onSelectionToggle
 }: MessageListProps) {
   if (messages.length === 0) {
@@ -33,6 +35,7 @@ export function MessageList({
           selected={selectedIds.has(message.id)}
           selectMode={selectMode}
           onCategoryChange={onCategoryChange}
+          onOpen={onMessageOpen}
           onSelectionToggle={onSelectionToggle}
         />
       ))}
