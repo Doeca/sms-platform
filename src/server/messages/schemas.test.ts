@@ -20,6 +20,17 @@ describe("incomingMessageSchema", () => {
     expect(parsed.simSlot).toBe(1);
   });
 
+  it("accepts Android local datetime strings without timezone", () => {
+    const parsed = incomingMessageSchema.parse({
+      receivedPhoneNumber: "+8613800000000",
+      sender: "955xx",
+      body: "您的验证码是 123456，请勿泄露",
+      receivedAt: "2026-01-28 14:30:00"
+    });
+
+    expect(parsed.receivedAt).toEqual(new Date(2026, 0, 28, 14, 30, 0));
+  });
+
   it("rejects missing required fields", () => {
     const result = incomingMessageSchema.safeParse({
       receivedPhoneNumber: "+8613800000000",

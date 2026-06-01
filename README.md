@@ -52,6 +52,9 @@ curl -X POST "http://localhost:3000/api/messages/ingest" \
 Required fields are `receivedPhoneNumber`, `sender`, `body`, and `receivedAt`.
 `deviceName` and `simSlot` are optional, but including them makes the inbox source
 labels clearer.
+`receivedAt` should preferably be an ISO datetime, but Android local datetime
+strings like `2026-01-28 14:30:00` are also accepted and interpreted in the
+server's local timezone.
 
 ## Classification
 

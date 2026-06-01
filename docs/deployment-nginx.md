@@ -264,7 +264,8 @@ Content-Type: application/json
 - `receivedPhoneNumber`：收到短信的手机号。
 - `sender`：短信发送方。
 - `body`：短信正文。
-- `receivedAt`：手机端收到短信的时间，建议使用 ISO 8601 UTC 时间。
+- `receivedAt`：手机端收到短信的时间。推荐使用 ISO 8601 UTC 时间，例如
+  `2026-05-30T08:30:00.000Z`；也支持 `2026-01-28 14:30:00` 这种手机端本地时间格式。
 
 可选字段：
 
@@ -273,6 +274,8 @@ Content-Type: application/json
 
 服务器会自动分类，手机端不需要提交分类。重复推送同一条短信时，请保持
 `receivedPhoneNumber + sender + body + receivedAt` 不变，这样服务器会识别为重复数据。
+如果发送的是 `YYYY-MM-DD HH:mm:ss` 这种没有时区的格式，后端会按服务器本地时区解析；
+如果手机时间是中国时间，建议服务器时区也设置为 `Asia/Shanghai`。
 
 用 curl 测试：
 
