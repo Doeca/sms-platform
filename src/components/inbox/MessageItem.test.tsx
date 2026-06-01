@@ -231,6 +231,28 @@ describe("MessageItem", () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 
+  it("toggles selection when the visible select control is clicked", async () => {
+    const onSelectionToggle = vi.fn();
+    const user = userEvent.setup();
+
+    const { container } = render(
+      <MessageItem
+        message={message}
+        selectMode
+        onCategoryChange={async () => undefined}
+        onSelectionToggle={onSelectionToggle}
+      />
+    );
+
+    const selectControl = container.querySelector(".message-item__select-control");
+
+    expect(selectControl).toBeInTheDocument();
+
+    await user.click(selectControl as HTMLElement);
+
+    expect(onSelectionToggle).toHaveBeenCalledWith("msg-1");
+  });
+
   it("toggles selection when the row is clicked in select mode", async () => {
     const onSelectionToggle = vi.fn();
     const user = userEvent.setup();

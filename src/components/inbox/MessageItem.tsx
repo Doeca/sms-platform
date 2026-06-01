@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, MouseEvent } from "react";
 import type { ClientCategory, ClientMessage } from "@/client/api";
 import { getCategoryLabel, inboxCategoryTabs } from "./category-config";
 
@@ -48,7 +48,15 @@ export function MessageItem({
     onOpen(message.id);
   }
 
-  function handleRowClick() {
+  function handleArticleClick() {
+    if (selectMode) {
+      toggleSelection();
+    }
+  }
+
+  function handleRowClick(event: MouseEvent<HTMLElement>) {
+    event.stopPropagation();
+
     if (selectMode) {
       toggleSelection();
       return;
@@ -81,6 +89,7 @@ export function MessageItem({
       className={`message-item ${
         message.isRead ? "is-read" : "is-unread"
       }${selectedClass}${modeClass}`}
+      onClick={selectMode ? handleArticleClick : undefined}
     >
       {selectMode ? (
         <span
